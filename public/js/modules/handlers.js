@@ -1,6 +1,8 @@
 /**
  * Глобальные обработчики кликов (делегирование событий)
  */
+const stopLink = e => { e.preventDefault(); e.stopPropagation(); };
+
 document.addEventListener('click', async e => {
   // ======================== КЛИК ПО ДИАЛОГУ ========================
   if (e.target.closest('.conversation-item-modern')) {
@@ -9,6 +11,10 @@ document.addEventListener('click', async e => {
     if (ci && window.innerWidth <= 768) {
       e.preventDefault();
       e.stopPropagation();
+      // Останавливаем переход по ссылке внутри
+      if (e.target.closest('a')) {
+        e.target.closest('a').addEventListener('click', stopLink, { once: true });
+      }
       console.log('[handlers] Clicked conversation:', ci.dataset.chatId, ci.dataset.chatName);
       if (typeof window.openChat === 'function') {
         window.openChat(parseInt(ci.dataset.chatId), ci.dataset.chatName, ci.dataset.chatAvatar, ci.dataset.chatUsername);

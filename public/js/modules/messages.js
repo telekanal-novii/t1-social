@@ -281,8 +281,7 @@ window.renderMessageBubble = async function(m) {
   }
 
   const text = m.type === 'text' ? `<div>${esc(displayContent)}</div>` :
-    (m.type === 'e2e' ? `<div>${esc(displayContent)}</div>` :
-    (displayContent ? `<div class="msg-text">${esc(displayContent)}</div>` : ''));
+    (m.type === 'e2e' ? `<div>${esc(displayContent)}</div>` : '');
 
   return `<div class="message-bubble ${isSent ? 'sent' : 'received'}">${text}${fileHTML}<div class="message-time">${t}</div></div>`;
 };
@@ -445,6 +444,9 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMediaVi
 
 // ======================== ЗАГРУЗКА ФАЙЛОВ ========================
 
+// Переменная для хранения файла перед отправкой
+let pendingMessageFile = null;
+
 window.sendMessageFile = async function(file, receiverId) {
   if (!file || !receiverId) return;
   const fd = new FormData(); fd.append('file', file);
@@ -491,23 +493,76 @@ window.cancelDropPreview = function() {
   const p = $('#drop-preview'); if (p) p.remove(); window._droppedFiles = null;
 };
 
-// File input
+// File input — сохраняем файл, но не отправляем сразу
 $('#message-file-input')?.addEventListener('change', e => {
   const file = e.target.files[0];
-  if (file && state.chatUserId) { sendMessageFile(file, state.chatUserId); e.target.value = ''; }
+  if (file && state.chatUserId) {
+    pendingMessageFile = file;
+    // Показываем превью
+    const preview = $('#file-preview');
+    if (preview) {
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          preview.innerHTML = `<img src="${reader.result}" style="max-width:200px;max-height:120px;border-radius:8px;">
+            <button type="button" class="file-preview-remove" data-action="remove-file-preview">✕</button>`;
+        };
+        reader.readAsDataURL(file);
+      } else {
+        preview.innerHTML = `📎 ${esc(file.name)} <button type="button" class="file-preview-remove" data-action="remove-file-preview">✕</button>`;
+      }
+      preview.style.display = 'block';
+    }
+  }
+  e.target.value = '';
+});
+
+// Удаление превью файла
+document.addEventListener('click', e => {
+  if (e.target.closest('[data-action="remove-file-preview"]')) {
+    pendingMessageFile = null;
+    const preview = $('#file-preview');
+    if (preview) { preview.style.display = 'none'; preview.innerHTML = ''; }
+  }
 });
 
 // Send message — Enter отправляет, Ctrl+Enter переносит строку
 $('#message-form')?.addEventListener('submit', async e => {
   e.preventDefault();
   const input = $('#message-input'), content = input.value.trim();
-  if (!content || !state.chatUserId) return;
+  if (!content && !pendingMessageFile) return;
+  if (!state.chatUserId) return;
 
-  // E2E шифрование
-  const encrypted = await encryptMessageForUser(content, state.chatUserId);
-  socket.emit('send_message', { receiverId: state.chatUserId, content: encrypted.content, type: encrypted.type });
+  if (pendingMessageFile) {
+    // Отправляем файл + текст вместе
+    const fd = new FormData();
+    fd.append('file', pendingMessageFile);
+    try {
+      const up = await api('/api/messages/upload', { method: 'POST', body: fd });
+      // Если есть текст, шифруем и добавляем к файлу
+      let msgContent = up.fileName;
+      if (content) {
+        const encrypted = await encryptMessageForUser(content, state.chatUserId);
+        msgContent = encrypted.content;
+      }
+      const msgType = content ? (up.type === 'e2e' ? 'e2e' : up.type) : up.type;
+      socket.emit('send_message', {
+        receiverId: state.chatUserId,
+        content: msgContent,
+        type: up.type,
+        fileUrl: up.fileUrl
+      });
+    } catch (e) { notify('Ошибка загрузки: ' + e.message, 'error'); return; }
+    pendingMessageFile = null;
+    const preview = $('#file-preview');
+    if (preview) { preview.style.display = 'none'; preview.innerHTML = ''; }
+  } else if (content) {
+    // Только текст
+    const encrypted = await encryptMessageForUser(content, state.chatUserId);
+    socket.emit('send_message', { receiverId: state.chatUserId, content: encrypted.content, type: encrypted.type });
+  }
+
   input.value = '';
-  // Сброс высоты textarea
   input.style.height = 'auto';
 });
 

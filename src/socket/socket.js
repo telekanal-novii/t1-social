@@ -162,11 +162,14 @@ function setupSocket(io, db) {
           const receiverSocketId = connectedUsers.get(Number(receiver));
           if (receiverSocketId) {
             io.to(receiverSocketId).emit('new_message', msg);
-            // Уведомление
-            sendNotification(Number(receiver), 'new_message', {
-              fromUserId: senderId,
-              content: content?.substring(0, 100) || '',
-              type
+            // Уведомление — получаем имя отправителя
+            db.get('SELECT username, display_name FROM users WHERE id = ?', [senderId], (err, sender) => {
+              sendNotification(Number(receiver), 'new_message', {
+                fromUserId: senderId,
+                fromUsername: sender ? (sender.display_name || sender.username) : '',
+                content: content?.substring(0, 100) || '',
+                type
+              });
             });
           }
           socket.emit('message_sent', msg);

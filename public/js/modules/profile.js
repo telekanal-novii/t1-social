@@ -287,8 +287,14 @@ $('#avatar-submit-btn')?.addEventListener('click', async () => {
     const newAvatar = result.avatar || result.url;
     if (newAvatar) {
       // Sidebar user-card
-      const sidebarImg = $('#sidebar-avatar img');
-      if (sidebarImg) sidebarImg.src = newAvatar;
+      const sidebarContainer = $('#sidebar-avatar');
+      if (sidebarContainer) {
+        const img = sidebarContainer.querySelector('img');
+        if (img) img.src = newAvatar;
+        sidebarContainer.style.display = 'block';
+        const ph = $('#sidebar-avatar-placeholder');
+        if (ph) ph.style.display = 'none';
+      }
       // Profile page
       const profileImg = $('#profile-avatar');
       if (profileImg) { profileImg.src = newAvatar; profileImg.style.display = 'block'; }
