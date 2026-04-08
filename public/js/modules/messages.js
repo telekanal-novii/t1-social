@@ -14,22 +14,14 @@ const e2ePublicKeyCache = new Map();
  * @returns {Promise<CryptoKey|null>}
  */
 async function getUserE2EKey(userId) {
-  if (e2ePublicKeyCache.has(userId)) {
-    const cached = e2ePublicKeyCache.get(userId);
-    if (cached === null) return null; // нет ключа
-    return E2E.importPublicKey(cached);
-  }
-
+  // Не кэшируем — всегда запрашиваем свежий ключ с сервера
   try {
     const user = await api(`/api/users/${userId}`);
     if (user.e2e_public_key) {
-      e2ePublicKeyCache.set(userId, user.e2e_public_key);
       return E2E.importPublicKey(user.e2e_public_key);
     }
-    e2ePublicKeyCache.set(userId, null);
     return null;
   } catch {
-    e2ePublicKeyCache.set(userId, null);
     return null;
   }
 }

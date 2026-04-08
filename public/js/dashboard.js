@@ -63,19 +63,14 @@
       }
     }
 
-    // Фоновое обновление данных (только активной страницы)
-    setInterval(() => {
-      if (typeof currentPage === 'undefined') return;
-      if (currentPage === 'feed') loadAllUsers();
-      if (currentPage === 'friends') { loadFriendRequests(); loadFriends(); }
-      if (currentPage === 'music' && typeof loadMusic === 'function') loadMusic();
-    }, 30000);
+    // Фоновое обновление ТОЛЬКО счётчиков (не ломает контент страницы)
+    setInterval(loadFriendRequestsCount, 30000);
+    setInterval(loadMessagesCount, 30000);
 
-    setInterval(loadFriendRequestsCount, 10000);
-    setInterval(loadMessagesCount, 10000);
+    // Диалоги обновляются только если НЕ открыт чат
     setInterval(() => {
       if (typeof currentPage !== 'undefined' && currentPage === 'messages' && typeof state !== 'undefined' && !state.chatUserId) loadConversations();
-    }, 15000);
+    }, 30000);
   } catch {
     // Не авторизован — редирект
     document.body.style.display = '';
