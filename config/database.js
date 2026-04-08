@@ -86,6 +86,19 @@ function initializeDatabase() {
       UNIQUE(post_id, user_id)
     )`);
 
+    // Таблица музыкальных треков
+    db.run(`CREATE TABLE IF NOT EXISTS music_tracks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      filename TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      title TEXT DEFAULT '',
+      artist TEXT DEFAULT '',
+      duration INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`);
+
     // === ИНДЕКСЫ для производительности ===
     db.run(`CREATE INDEX IF NOT EXISTS idx_messages_sender_receiver ON messages(sender_id, receiver_id)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_messages_receiver_read ON messages(receiver_id, is_read)`);
@@ -96,6 +109,9 @@ function initializeDatabase() {
     db.run(`CREATE INDEX IF NOT EXISTS idx_wall_posts_created ON wall_posts(created_at DESC)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_post_comments_post ON post_comments(post_id)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_post_likes_post ON post_likes(post_id)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_post_likes_user ON post_likes(user_id)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_music_tracks_user ON music_tracks(user_id)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_music_tracks_created ON music_tracks(created_at DESC)`);
 
     console.log('База данных инициализирована');
   });
