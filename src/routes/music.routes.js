@@ -63,7 +63,7 @@ router.get('/api/music/user/:userId', authenticateToken, (req, res) => {
 });
 
 /** Загрузить трек (с конвертацией в MP3 128kbps) */
-router.post('/api/music/upload', authenticateToken, upload.single('audio'), (req, res) => {
+router.post('/api/music/upload', authenticateToken, upload.single('audio'), async (req, res) => {
   console.log('[music] Upload request received');
   console.log('[music] File:', req.file ? req.file.originalname : 'none');
   console.log('[music] Body:', req.body);
@@ -72,19 +72,27 @@ router.post('/api/music/upload', authenticateToken, upload.single('audio'), (req
 
   const { title, artist, duration } = req.body || {};
   const originalPath = req.file.path;
-  // Всегда конвертируем в MP3 для экономии места и унификации
-  const finalPath = originalPath.replace(/\.[^.]+$/, '.mp3');
+  const isMp3 = path.extname(req.file.originalname).toLowerCase() === '.mp3';
+  // Если уже MP3 — используем оригинальный файл, иначе конвертируем
+  const finalPath = isMp3 ? originalPath : originalPath.replace(/\.[^.]+$/, '.mp3');
 
   console.log('[music] Original path:', originalPath);
+  console.log('[music] Is MP3:', isMp3);
   console.log('[music] Final path:', finalPath);
 
-  const finalize = (error) => {
-    if (error) {
-      console.error('[music] Upload error:', error);
-      // Чистка файлов при ошибке
+  try {
+    // Конвертируем только если не MP3
+    if (!isMp3) {
+      await new Promise((resolve, reject) => {
+        ffmpeg(originalPath)
+          .audioBitrate(128)
+          .format('mp3')
+          .on('end', resolve)
+          .on('error', reject)
+          .save(finalPath);
+      });
+      // Удаляем оригинальный файл
       try { fs.unlinkSync(originalPath); } catch(e) {}
-      try { fs.unlinkSync(finalPath); } catch(e) {}
-      return res.status(500).json({ error: 'Ошибка обработки аудио' });
     }
 
     // Запись в БД
@@ -96,29 +104,22 @@ router.post('/api/music/upload', authenticateToken, upload.single('audio'), (req
           try { fs.unlinkSync(finalPath); } catch(e) {}
           return res.status(500).json({ error: 'Ошибка сохранения в БД' });
         }
-        res.json({ 
-          success: true, 
-          id: this.lastID, 
-          filename: path.basename(finalPath), 
-          original_name: req.file.originalname 
+        console.log('[music] Track saved to DB, id:', this.lastID);
+        res.json({
+          success: true,
+          id: this.lastID,
+          filename: path.basename(finalPath),
+          original_name: req.file.originalname
         });
       }
     );
-  };
-
-  // Запуск конвертации
-  ffmpeg(originalPath)
-    .audioBitrate(128)
-    .format('mp3')
-    .on('end', () => {
-      // Удаляем оригинальный файл (он больше не нужен)
-      try { fs.unlinkSync(originalPath); } catch(e) {}
-      finalize(null);
-    })
-    .on('error', (err) => {
-      finalize(err);
-    })
-    .save(finalPath);
+  } catch (err) {
+    console.error('[music] Upload error:', err);
+    // Чистка файлов при ошибке
+    try { fs.unlinkSync(originalPath); } catch(e) {}
+    try { fs.unlinkSync(finalPath); } catch(e) {}
+    res.status(500).json({ error: 'Ошибка обработки аудио' });
+  }
 });
 
 /** Удалить трек */

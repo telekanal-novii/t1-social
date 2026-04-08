@@ -58,6 +58,9 @@ const apiLimiter = rateLimit({
 });
 
 // === Middleware ===
+// Trust proxy для корректной работы за reverse proxy (HF Spaces)
+app.set('trust proxy', 1);
+
 // Helmet — security headers (CSP, X-Frame-Options, HSTS и т.д.)
 app.use(helmet({
   contentSecurityPolicy: {
