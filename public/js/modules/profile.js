@@ -58,19 +58,27 @@ function postCardHTML(p, userId, showComments = false) {
 
 // ======================== ЛЕНТА ========================
 
+// Состояние фильтров ленты
+const feedState = {
+  filter: 'all',    // all | friends | mine
+  sort: 'new'       // new | popular
+};
+
 async function loadAllUsers() {
-  console.log('[profile] loadAllUsers called (feed)');
+  console.log(`[profile] Feed: filter=${feedState.filter}, sort=${feedState.sort}`);
   try {
     const c = $('#feed-posts');
     if (!c) { console.warn('[profile] #feed-posts not found'); return; }
     c.innerHTML = '<div class="wall-empty"><p>Загрузка...</p></div>';
 
-    // Один запрос вместо N+1 — загружаем все посты сразу
-    const data = await api('/api/wall/feed');
+    const data = await api(`/api/wall/feed?filter=${feedState.filter}&sort=${feedState.sort}`);
     const posts = data.posts || [];
 
     if (!posts.length) {
-      c.innerHTML = '<div class="wall-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><p>Пока нет записей</p></div>';
+      const emptyMsg = feedState.filter === 'friends' ? 'У друзей пока нет записей'
+        : feedState.filter === 'mine' ? 'У вас пока нет записей'
+        : 'Пока нет записей';
+      c.innerHTML = `<div class="wall-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><p>${emptyMsg}</p></div>`;
       return;
     }
 
@@ -628,3 +636,40 @@ window.loadComments = async function(postId, card, showAll = false) {
     list.scrollTop = 0;
   } catch (e) { console.error('loadComments:', e); }
 };
+
+// ======================== ТАБЫ И СОРТИРОВКА ЛЕНТЫ ========================
+
+// Обработчик табов-фильтров
+document.addEventListener('click', e => {
+  // Табы фильтрации
+  const feedTab = e.target.closest('.feed-tab');
+  if (feedTab) {
+    const filter = feedTab.dataset.feedFilter;
+    if (!filter) return;
+    feedState.filter = filter;
+
+    // Обновляем активный таб
+    $$('.feed-tab').forEach(t => t.classList.remove('active'));
+    feedTab.classList.add('active');
+
+    // Перезагружаем ленту
+    if (typeof loadAllUsers === 'function') loadAllUsers();
+    return;
+  }
+
+  // Кнопки сортировки
+  const sortBtn = e.target.closest('.feed-sort-btn');
+  if (sortBtn) {
+    const sort = sortBtn.dataset.feedSort;
+    if (!sort) return;
+    feedState.sort = sort;
+
+    // Обновляем активную кнопку
+    $$('.feed-sort-btn').forEach(b => b.classList.remove('active'));
+    sortBtn.classList.add('active');
+
+    // Перезагружаем ленту
+    if (typeof loadAllUsers === 'function') loadAllUsers();
+    return;
+  }
+});

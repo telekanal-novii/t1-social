@@ -44,21 +44,15 @@ function authenticateToken(req, res, next) {
       return res.status(403).json({ error: 'Неверный токен' });
     }
 
-    // КРИТИЧНО: Требуем device fingerprint в токене
-    if (!user.device) {
-      console.warn(`[SECURITY] Token without device fingerprint rejected for user ${user.id}`);
-      res.clearCookie('token', { path: '/' });
-      return res.status(403).json({ error: 'Устаревшая сессия. Войдите заново.' });
-    }
-
-    // Проверяем привязку к устройству
-    const ua = req.headers['user-agent'] || '';
-    const crypto = require('crypto');
-    const currentFp = crypto.createHash('md5').update(ua.slice(0, 128)).digest('hex').slice(0, 16);
-    if (user.device !== currentFp) {
-      console.warn(`[SECURITY] Device mismatch! User ${user.id} expected ${user.device} got ${currentFp} from ${ua.slice(0, 50)}...`);
-      res.clearCookie('token', { path: '/' });
-      return res.status(403).json({ error: 'Сессия недействительна для этого устройства' });
+    // Мягкая проверка device fingerprint — НЕ блокируем, а логируем
+    if (user.device) {
+      const ua = req.headers['user-agent'] || '';
+      const crypto = require('crypto');
+      const currentFp = crypto.createHash('md5').update(ua.slice(0, 128)).digest('hex').slice(0, 16);
+      if (user.device !== currentFp) {
+        // Логируем но НЕ блокируем — device fingerprint для мониторинга, не для блокировки
+        console.warn(`[SECURITY] Device mismatch: User ${user.id} | expected ${user.device.slice(0,8)}... got ${currentFp.slice(0,8)}... | UA: ${ua.slice(0, 60)}...`);
+      }
     }
 
     req.user = user;

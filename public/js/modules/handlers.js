@@ -46,6 +46,16 @@ document.addEventListener('click', async e => {
     return;
   }
 
+  // ======================== КЛИК ПО ИМЕНИ В ЗАЯВКЕ (переход в профиль) ========================
+  if (e.target.closest('.request-name')) {
+    const link = e.target.closest('.request-name');
+    if (link?.dataset.username) {
+      e.preventDefault(); e.stopPropagation();
+      window.openUserProfileByUsername(link.dataset.username);
+    }
+    return;
+  }
+
   // ======================== ПРОСМОТР АВАТАРКИ (только основная аватарка профиля) ========================
   const avatarImg = e.target.closest('#profile-avatar');
   if (avatarImg && avatarImg.src && !avatarImg.src.includes('placeholder')) {

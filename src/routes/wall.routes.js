@@ -15,18 +15,39 @@ const router = express.Router();
 const db = require('../../config/database');
 const { authenticateToken } = require('../middleware/auth');
 const { upload, validateImageMagic } = require('../middleware/upload-post');
+const { connectedUsers } = require('../socket/socket');
 
-/** Получить ленту всех постов (один запрос вместо N+1) */
+/** Получить ленту постов с фильтрацией и сортировкой
+ *  Query: filter=all|friends|mine, sort=new|popular
+ */
 router.get('/api/wall/feed', authenticateToken, (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 50, 100);
   const offset = parseInt(req.query.offset) || 0;
+  const filter = req.query.filter || 'all'; // all | friends | mine
+  const sort = req.query.sort || 'new';     // new | popular
+
+  // Строим WHERE условие
+  let whereClause = '';
+  const params = [];
+
+  if (filter === 'friends') {
+    whereClause = 'WHERE wp.user_id IN (SELECT friend_id FROM friendships WHERE user_id = ? AND status = \'accepted\')';
+    params.push(req.user.id);
+  } else if (filter === 'mine') {
+    whereClause = 'WHERE wp.author_id = ?';
+    params.push(req.user.id);
+  }
+
+  // Сортировка
+  const orderBy = sort === 'popular' ? 'wp.likes DESC, wp.created_at DESC' : 'wp.created_at DESC';
 
   db.all(
     `SELECT wp.id, wp.user_id, wp.author_id, wp.content, wp.image_url, wp.likes, wp.created_at,
             u.username, u.display_name, u.avatar
      FROM wall_posts wp INNER JOIN users u ON wp.author_id = u.id
-     ORDER BY wp.created_at DESC LIMIT ? OFFSET ?`,
-    [limit, offset], (err, posts) => {
+     ${whereClause}
+     ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
+    [...params, limit, offset], (err, posts) => {
       if (err) return res.status(500).json({ error: 'Ошибка сервера' });
       if (!posts.length) return res.json({ posts: [], hasMore: false });
 
@@ -53,7 +74,14 @@ router.get('/api/wall/feed', authenticateToken, (req, res) => {
                 comment_count: countMap[p.id] || 0
               }));
 
-              db.get('SELECT COUNT(*) as count FROM wall_posts', [], (err, { count }) => {
+              // Считаем общее количество постов с учётом фильтра
+              const countQuery = filter === 'friends'
+                ? 'SELECT COUNT(*) as count FROM wall_posts WHERE user_id IN (SELECT friend_id FROM friendships WHERE user_id = ? AND status = \'accepted\')'
+                : filter === 'mine'
+                  ? 'SELECT COUNT(*) as count FROM wall_posts WHERE author_id = ?'
+                  : 'SELECT COUNT(*) as count FROM wall_posts';
+
+              db.get(countQuery, [req.user.id], (err, { count }) => {
                 res.json({ posts: result, hasMore: offset + limit < count });
               });
             }
@@ -134,6 +162,31 @@ router.post('/api/wall/:userId', authenticateToken, upload.single('image'), vali
     db.run('INSERT INTO wall_posts (user_id, author_id, content, image_url) VALUES (?, ?, ?, ?)',
       [wallOwnerId, req.user.id, (content || '').trim(), imageUrl], function (err) {
         if (err) return res.status(500).json({ error: 'Ошибка создания поста' });
+
+        // Отправляем новый пост всем подключённым клиентам через socket
+        db.get(
+          `SELECT wp.id, wp.user_id, wp.author_id, wp.content, wp.image_url, wp.likes, wp.created_at,
+                  u.username, u.display_name, u.avatar
+           FROM wall_posts wp INNER JOIN users u ON wp.author_id = u.id
+           WHERE wp.id = ?`,
+          [this.lastID],
+          (err, post) => {
+            if (!err && post) {
+              post.liked = false;
+              post.comment_count = 0;
+              const { connectedUsers } = require('../socket/socket');
+              // Отправляем ВСЕМ подключённым клиентам (кроме отправителя)
+              connectedUsers.forEach((socketIds, uid) => {
+                if (uid !== req.user.id) {
+                  socketIds.forEach(sid => {
+                    require('../socket/socket').ioInstance?.to(sid).emit('new_post', post);
+                  });
+                }
+              });
+            }
+          }
+        );
+
         res.json({ success: true, postId: this.lastID, image_url: imageUrl });
       });
   });

@@ -78,6 +78,63 @@
   }
 })();
 
+// === Бесшовное обновление ленты ===
+if (typeof socket !== 'undefined') {
+  socket.on('new_post', async (post) => {
+    // Добавляем пост только если мы на странице ленты
+    if (typeof currentPage === 'undefined' || currentPage !== 'feed') return;
+
+    // Если активен фильтр 'Мои' — пост от другого пользователя не показываем
+    if (typeof feedState !== 'undefined' && feedState.filter === 'mine' && post.author_id !== window.currentUserId) return;
+
+    // Если активен фильтр 'Друзья' — проверяем что автор в друзьях
+    // (для простоты просто перезагружаем ленту)
+    if (typeof feedState !== 'undefined' && feedState.filter === 'friends') {
+      if (typeof loadAllUsers === 'function') loadAllUsers();
+      return;
+    }
+
+    const container = $('#feed-posts');
+    if (!container) return;
+
+    // Если это первый пост и лента пустая — перерисовываем всё
+    if (!container.querySelector('.wall-post-card') && container.querySelector('.wall-empty')) {
+      if (typeof loadAllUsers === 'function') loadAllUsers();
+      return;
+    }
+
+    // Вставляем пост в начало ленты
+    const html = typeof postCardHTML === 'function'
+      ? postCardHTML(post, window.currentUserId)
+      : '';
+    if (html) {
+      container.insertAdjacentHTML('afterbegin', html);
+      // Анимация появления
+      const firstPost = container.firstElementChild;
+      if (firstPost) {
+        firstPost.style.opacity = '0';
+        firstPost.style.transform = 'translateY(-20px)';
+        requestAnimationFrame(() => {
+          firstPost.style.transition = 'opacity .4s ease, transform .4s ease';
+          firstPost.style.opacity = '1';
+          firstPost.style.transform = 'translateY(0)';
+        });
+      }
+      // Обновляем превью комментариев
+      if (typeof loadCommentsPreview === 'function') {
+        const card = firstPost;
+        if (card && post.comment_count > 0) loadCommentsPreview(card);
+      }
+    }
+
+    // Уведомление
+    const authorName = post.display_name || post.username;
+    if (typeof notify === 'function') {
+      notify(`📝 ${authorName} опубликовал пост`);
+    }
+  });
+}
+
 // === Inline обработчики (из dashboard.html) ===
 document.getElementById('requests-header')?.addEventListener('click', () => {
   document.getElementById('requests-section').classList.toggle('expanded');

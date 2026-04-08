@@ -668,6 +668,72 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-pri
 
 /* ===== WALL ===== */
 .wall-posts { display: flex; flex-direction: column; gap: 0; background: #181825; border: 1px solid rgba(255,255,255,.08); border-radius: 16px; overflow: hidden; }
+
+/* ======================== ТАБЫ ЛЕНТЫ ======================== */
+.feed-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.feed-tab {
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .2s ease;
+  white-space: nowrap;
+}
+
+.feed-tab:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: rgba(99, 102, 241, .08);
+}
+
+.feed-tab.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.feed-sort {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+
+.feed-sort-btn {
+  padding: 6px 12px;
+  border-radius: 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all .2s ease;
+  white-space: nowrap;
+}
+
+.feed-sort-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.feed-sort-btn.active {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-weight: 600;
+}
 .wall-section { margin-top: 32px; }
 .wall-title { display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 700; color: var(--text-primary); margin-bottom: 20px; }
 .wall-title svg { width: 28px; height: 28px; color: var(--primary); }
@@ -1564,6 +1630,25 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-pri
 
   .chat-panel-modern {
     z-index: 1;
+  }
+
+  /* Табы ленты на мобильном */
+  .feed-tabs {
+    gap: 6px;
+  }
+
+  .feed-tab {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+
+  .feed-sort {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: none;
+    width: 100%;
+    justify-content: center;
+    margin-top: 4px;
   }
 }
 

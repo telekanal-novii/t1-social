@@ -35,7 +35,7 @@ async function loadFriendRequests() {
     if (inline) { inline.textContent = r.length; inline.style.display = 'inline'; }
     section?.classList.add('expanded');
 
-    c.innerHTML = r.map(x => `<div class="request-item">${avatarHTML(x, 'small')}<div><div class="request-name">${esc(x.display_name || x.username)}</div><div class="request-username">@${esc(x.username)}</div></div><div class="request-actions"><button class="btn btn-small btn-accept" data-action="accept-request" data-id="${x.friendship_id}">✓</button><button class="btn btn-small btn-reject" data-action="reject-request" data-id="${x.friendship_id}">✕</button></div></div>`).join('');
+    c.innerHTML = r.map(x => `<div class="request-item">${avatarHTML(x, 'small')}<div><a href="/${esc(x.username)}" class="request-name post-author-link" data-username="${esc(x.username)}">${esc(x.display_name || x.username)}</a><div class="request-username">@${esc(x.username)}</div></div><div class="request-actions"><button class="btn btn-small btn-accept" data-action="accept-request" data-id="${x.friendship_id}">✓</button><button class="btn btn-small btn-reject" data-action="reject-request" data-id="${x.friendship_id}">✕</button></div></div>`).join('');
   } catch (e) { console.error('loadFriendRequests:', e); }
 }
 

@@ -10,15 +10,10 @@ window.openUserProfileByUsername = async function(username) {
   try {
     const decoded = decodeURIComponent(username);
 
-    // Проверяем — не свой ли это профиль
-    try {
-      const myProfile = await api('/api/profile');
-      if (decoded === myProfile.username) {
-        history.replaceState({ page: 'profile' }, '', '/profile');
-        return navigateTo('profile');
-      }
-    } catch (e) {
-      console.warn('[userProfile] decodeURIComponent error:', e);
+    // Проверяем — не свой ли это профиль (через кэш, без API)
+    if (window.currentUsername && decoded === window.currentUsername) {
+      history.replaceState({ page: 'profile' }, '', '/profile');
+      return navigateTo('profile');
     }
 
     const users = await api('/api/users');
@@ -46,6 +41,9 @@ async function renderUserProfile(profile) {
   $$('.page').forEach(p => p.classList.remove('active'));
   $('#user-profile-page')?.classList.add('active');
   history.pushState({ page: 'user-profile', username: profile.username }, '', `/${profile.username}`);
+
+  // КРИТИЧНО: обновляем currentPage чтобы навигация работала корректно
+  if (typeof currentPage !== 'undefined') currentPage = 'user-profile';
 
   // Инфо
   set('#other-profile-username', '@' + profile.username);

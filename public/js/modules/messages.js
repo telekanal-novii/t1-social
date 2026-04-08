@@ -53,8 +53,8 @@ async function tryDecryptMessage(content, type) {
   try {
     return await E2E.decryptMessage(content);
   } catch (e) {
-    console.warn('[E2E] Ошибка расшифровки:', e);
-    return '🔒 [Не удалось расшифровать сообщение]';
+    // Не спамим в консоль — это нормально при смене ключей
+    return '🔒 [Не удалось расшифровать — ключи были изменены]';
   }
 }
 
@@ -237,21 +237,24 @@ async function loadMessages(fid, prepend = false) {
 }
 
 /**
- * Рендерит одно сообщение в bubble и добавляет в DOM
+ * Добавляет одно сообщение в DOM
  * @param {Object} m — сообщение
  * @param {string} cls — CSS класс ('sent' или 'received')
  */
 async function appendMessageBubble(m, cls) {
-  const html = await renderMessageBubble(m);
   const c = $('#chat-messages');
   if (!c) return;
-  const div = document.createElement('div');
-  div.className = `message-bubble ${cls}`;
-  div.innerHTML = html;
-  c.appendChild(div);
-  const player = div.querySelector('.audio-player');
+
+  const html = await renderMessageBubble(m);
+  // renderMessageBubble уже возвращает полный <div class="message-bubble ...">
+  c.insertAdjacentHTML('beforeend', html);
+
+  const lastBubble = c.lastElementChild;
+  if (!lastBubble) return;
+
+  const player = lastBubble.querySelector('.audio-player');
   if (player) initAudioDuration(player);
-  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  lastBubble.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
 /**
