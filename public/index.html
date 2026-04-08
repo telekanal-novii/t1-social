@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Т1 Сеть - Вход</title>
+  <link rel="stylesheet" href="css/auth.css">
+</head>
+<body>
+  <div class="auth-container">
+    <div class="auth-logo">
+      <h1>Т1 Сеть</h1>
+      <p>Локальная социальная сеть</p>
+    </div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" data-tab="login">Вход</button>
+      <button class="auth-tab" data-tab="register">Регистрация</button>
+    </div>
+
+    <!-- Форма входа -->
+    <form id="login-form" class="auth-form active">
+      <div class="form-group">
+        <label for="login-username">Логин</label>
+        <input type="text" id="login-username" required placeholder="Введите логин">
+      </div>
+      <div class="form-group">
+        <label for="login-password">Пароль</label>
+        <input type="password" id="login-password" required placeholder="Введите пароль">
+      </div>
+      <button type="submit" class="btn btn-primary">Войти</button>
+      <div id="login-error" class="error-message"></div>
+    </form>
+
+    <!-- Форма регистрации -->
+    <form id="register-form" class="auth-form">
+      <div class="form-group">
+        <label for="register-username">Логин</label>
+        <input type="text" id="register-username" required placeholder="Придумайте логин">
+      </div>
+      <div class="form-group">
+        <label for="register-password">Пароль</label>
+        <input type="password" id="register-password" required placeholder="Придумайте пароль (мин. 4 символа)">
+      </div>
+      <div class="form-group">
+        <label for="register-password-confirm">Подтверждение пароля</label>
+        <input type="password" id="register-password-confirm" required placeholder="Повторите пароль">
+      </div>
+      <button type="submit" class="btn btn-primary">Зарегистрироваться</button>
+      <div id="register-error" class="error-message"></div>
+    </form>
+  </div>
+
+  <script src="js/auth.js"></script>
+  <script>
+    // Если уже авторизован — редирект на dashboard
+    (async () => {
+      try {
+        const res = await fetch('/api/profile', { credentials: 'include' });
+        if (res.ok) window.location.href = '/dashboard.html';
+      } catch {}
+    })();
+  </script>
+</body>
+</html>
