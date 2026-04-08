@@ -9,7 +9,12 @@
  * @returns {Date}
  */
 window.parseUTC = function(str) {
-  return new Date(str.replace(' ', 'T') + 'Z');
+  if (!str) return new Date();
+  // Если уже ISO-формат с T и Z
+  if (str.includes('T')) return new Date(str);
+  // SQLite формат: YYYY-MM-DD HH:MM:SS
+  const d = new Date(str.replace(' ', 'T') + 'Z');
+  return isNaN(d.getTime()) ? new Date() : d;
 };
 
 /** Опции форматирования для полной даты и времени */

@@ -169,7 +169,11 @@ window.openChat = async function(fId, fName, fAvatar, fUsername = '') {
   $$('.conversation-item-modern').forEach(i => { i.classList.toggle('active', i.dataset.chatId == fId); });
   messagesCursor = null; // сброс курсора при открытии нового чата
   await loadMessages(fId);
-  await loadMessagesCount();
+  // После загрузки сообщений сервер уже пометил их прочитанными — обновляем счётчик
+  setTimeout(async () => {
+    await loadMessagesCount();
+    await loadConversations();
+  }, 300);
 }
 
 // ======================== СООБЩЕНИЯ ========================
@@ -259,7 +263,11 @@ window.renderMessageBubble = async function(m) {
   if (m.type === 'image') fileHTML = `<div class="msg-file"><img src="${safeUrl}" class="msg-image" data-action="view-media" data-url="${m.file_url}" data-type="image"></div>`;
   else if (m.type === 'audio') fileHTML = `<div class="msg-file"><div class="audio-player" data-src="${safeUrl}"><div class="audio-play-btn" data-action="toggle-audio"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div><div class="audio-progress-wrap" data-action="seek-audio"><div class="audio-progress-bar"><div class="audio-progress-fill" style="width:0%"></div></div></div><div class="audio-time"><span class="cur">0:00</span><span class="tot"></span></div><audio src="${safeUrl}" preload="metadata"></audio></div></div>`;
   else if (m.type === 'video') fileHTML = `<div class="msg-file"><video controls class="msg-video" src="${safeUrl}"></video></div>`;
-  else if (m.type === 'file') fileHTML = `<div class="msg-file"><a href="${safeUrl}" class="msg-file-link" download>📎 ${esc(m.content)}</a></div>`;
+  else if (m.type === 'file') {
+    // Извлекаем имя файла из URL или используем content
+    const fileName = m.file_url ? m.file_url.split('/').pop() : (m.content ? 'Файл' : 'Файл');
+    fileHTML = `<div class="msg-file"><a href="${safeUrl}" class="msg-file-link" download>📎 ${esc(fileName)}</a></div>`;
+  }
 
   const text = m.type === 'text' ? `<div>${esc(displayContent)}</div>` :
     (m.type === 'e2e' ? `<div>${esc(displayContent)}</div>` :

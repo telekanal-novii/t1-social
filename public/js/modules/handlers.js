@@ -308,6 +308,7 @@ document.addEventListener('click', async e => {
       const req = reqs.find(r => r.friendship_id === id);
       if (req) state.friendStatuses[req.user_id] = { status: 'accepted', direction: 'mutual' };
       await loadFriendRequests(); await loadFriends();
+      await loadFriendRequestsCount();
       if (typeof renderUsersGridForPeople === 'function') renderUsersGridForPeople(state.usersCache);
       notify('Заявка принята!');
     } catch { notify('Ошибка', 'error'); }
