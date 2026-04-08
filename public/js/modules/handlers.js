@@ -3,9 +3,22 @@
  */
 document.addEventListener('click', async e => {
   // ======================== КЛИК ПО ДИАЛОГУ ========================
-  if (e.target.closest('.conversation-item-modern') && !e.target.closest('a') && !e.target.closest('button')) {
+  if (e.target.closest('.conversation-item-modern')) {
     const ci = e.target.closest('.conversation-item-modern');
-    if (ci) {
+    // На мобильном — всегда открываем чат (не переходим по ссылке)
+    if (ci && window.innerWidth <= 768) {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('[handlers] Clicked conversation:', ci.dataset.chatId, ci.dataset.chatName);
+      if (typeof window.openChat === 'function') {
+        window.openChat(parseInt(ci.dataset.chatId), ci.dataset.chatName, ci.dataset.chatAvatar, ci.dataset.chatUsername);
+      } else {
+        console.error('[handlers] window.openChat is not defined');
+      }
+      return;
+    }
+    // На десктопе — только если не клик по ссылке
+    if (ci && !e.target.closest('a') && !e.target.closest('button')) {
       e.preventDefault();
       console.log('[handlers] Clicked conversation:', ci.dataset.chatId, ci.dataset.chatName);
       if (typeof window.openChat === 'function') {

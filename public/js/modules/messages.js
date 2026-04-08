@@ -261,13 +261,22 @@ window.renderMessageBubble = async function(m) {
 
   let fileHTML = '';
   if (m.type === 'image') {
-    const fileName = m.file_url ? m.file_url.split('/').pop() : '';
+    // Извлекаем оригинальное имя файла из content или URL
+    let fileName = '';
+    if (m.content && m.content.length < 100) fileName = m.content;
+    else if (m.file_url) fileName = m.file_url.split('/').pop().replace(/^[a-f0-9-]+\./, '');
     fileHTML = `<div class="msg-file"><img src="${safeUrl}" class="msg-image" data-action="view-media" data-url="${m.file_url}" data-type="image">${fileName ? `<div class="msg-file-name">${esc(fileName)}</div>` : ''}</div>`;
   }
-  else if (m.type === 'audio') fileHTML = `<div class="msg-file"><div class="audio-player" data-src="${safeUrl}"><div class="audio-play-btn" data-action="toggle-audio"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div><div class="audio-progress-wrap" data-action="seek-audio"><div class="audio-progress-bar"><div class="audio-progress-fill" style="width:0%"></div></div></div><div class="audio-time"><span class="cur">0:00</span><span class="tot"></span></div><audio src="${safeUrl}" preload="metadata"></audio></div></div>`;
+  else if (m.type === 'audio') {
+    // Показываем оригинальное имя файла для аудио
+    let audioName = '';
+    if (m.content && m.content.length < 200 && !E2E.isEncrypted(m.content)) audioName = m.content;
+    else if (m.file_url) audioName = m.file_url.split('/').pop().replace(/^[a-f0-9-]+-/, '').replace(/\.[^.]+$/, '');
+    fileHTML = `<div class="msg-file"><div class="audio-player" data-src="${safeUrl}" data-name="${esc(audioName)}"><div class="audio-play-btn" data-action="toggle-audio"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div><div class="audio-info"><div class="audio-name">${esc(audioName)}</div><div class="audio-controls"><div class="audio-progress-wrap" data-action="seek-audio"><div class="audio-progress-bar"><div class="audio-progress-fill" style="width:0%"></div></div></div><div class="audio-time"><span class="cur">0:00</span><span class="tot"></span></div></div></div><audio src="${safeUrl}" preload="metadata"></audio></div></div>`;
+  }
   else if (m.type === 'video') fileHTML = `<div class="msg-file"><video controls class="msg-video" src="${safeUrl}"></video></div>`;
   else if (m.type === 'file') {
-    const fileName = m.file_url ? m.file_url.split('/').pop() : 'Файл';
+    const fileName = m.content && m.content.length < 200 ? m.content : (m.file_url ? m.file_url.split('/').pop() : 'Файл');
     fileHTML = `<div class="msg-file"><a href="${safeUrl}" class="msg-file-link" download>📎 ${esc(fileName)}</a></div>`;
   }
 

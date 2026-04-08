@@ -281,9 +281,31 @@ $('#avatar-submit-btn')?.addEventListener('click', async () => {
   if (!selectedAvatarFile) return notify('Выберите файл', 'error');
   const fd = new FormData(); fd.append('avatar', selectedAvatarFile);
   try {
-    await api('/api/profile/avatar', { method: 'PUT', body: fd });
+    const result = await api('/api/profile/avatar', { method: 'PUT', body: fd });
     $('#avatar-modal').style.display = 'none';
-    loadProfile(); notify('Аватар обновлен!');
+    // Сразу обновляем аватарку везде
+    const newAvatar = result.avatar || result.url;
+    if (newAvatar) {
+      // Sidebar user-card
+      const sidebarImg = $('#sidebar-avatar img');
+      if (sidebarImg) sidebarImg.src = newAvatar;
+      // Profile page
+      const profileImg = $('#profile-avatar');
+      if (profileImg) { profileImg.src = newAvatar; profileImg.style.display = 'block'; }
+      const profilePH = $('#profile-avatar-placeholder');
+      if (profilePH) profilePH.style.display = 'none';
+      // Wall post form
+      const postFormImg = $('#post-form-avatar');
+      if (postFormImg) { postFormImg.src = newAvatar; postFormImg.style.display = 'block'; }
+      const postFormPH = $('#post-form-avatar-placeholder');
+      if (postFormPH) postFormPH.style.display = 'none';
+      // Feed post form
+      const feedImg = $('#feed-post-avatar');
+      if (feedImg) { feedImg.src = newAvatar; feedImg.style.display = 'block'; }
+      const feedPH = $('#feed-post-avatar-placeholder');
+      if (feedPH) feedPH.style.display = 'none';
+    }
+    notify('Аватар обновлен!');
     $('#avatar-file').value = ''; $('#avatar-preview-container').style.display = 'none';
     $('#avatar-preview').style.display = 'none';
     selectedAvatarFile = null;
@@ -321,6 +343,14 @@ async function loadWall(uid = userId, cid = 'wall-posts') {
 // Публикация поста на главной
 $('#feed-publish-btn')?.addEventListener('click', () => publishPost(userId, 'feed-post-content', 'feed-char-count', 'feed-posts'));
 
+// Enter — опубликовать, Ctrl+Enter — новая строка
+$('#feed-post-content')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    publishPost(userId, 'feed-post-content', 'feed-char-count', 'feed-posts');
+  }
+});
+
 // Счётчик символов на главной
 $('#feed-post-content')?.addEventListener('input', e => {
   const c = e.target.value.length, ctr = $('#feed-char-count');
@@ -332,6 +362,14 @@ $('#feed-post-content')?.addEventListener('input', e => {
 
 // Публикация поста на своей стене
 $('#publish-post-btn')?.addEventListener('click', () => publishPost());
+
+// Enter — опубликовать, Ctrl+Enter — новая строка
+$('#post-content')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    publishPost();
+  }
+});
 // Флаги защиты от двойного клика
 const publishingPosts = new Set();
 
@@ -507,6 +545,14 @@ $$('.post-image-remove').forEach(btn => {
 $('#other-publish-post-btn')?.addEventListener('click', () => {
   if (!state.otherUserId) return notify('Откройте профиль пользователя', 'error');
   publishPost(state.otherUserId, 'other-post-content', 'other-char-count', 'other-wall-posts');
+});
+
+// Enter — опубликовать, Ctrl+Enter — новая строка
+$('#other-post-content')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    if (state.otherUserId) publishPost(state.otherUserId, 'other-post-content', 'other-char-count', 'other-wall-posts');
+  }
 });
 
 // Комментарии
