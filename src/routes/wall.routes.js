@@ -15,7 +15,7 @@ const router = express.Router();
 const db = require('../../config/database');
 const { authenticateToken } = require('../middleware/auth');
 const { upload, validateImageMagic } = require('../middleware/upload-post');
-const { connectedUsers } = require('../socket/socket');
+const { connectedUsers, broadcastNewPost } = require('../socket/socket');
 
 /** Получить ленту постов с фильтрацией и сортировкой
  *  Query: filter=all|friends|mine, sort=new|popular
@@ -75,13 +75,21 @@ router.get('/api/wall/feed', authenticateToken, (req, res) => {
               }));
 
               // Считаем общее количество постов с учётом фильтра
-              const countQuery = filter === 'friends'
-                ? 'SELECT COUNT(*) as count FROM wall_posts WHERE user_id IN (SELECT friend_id FROM friendships WHERE user_id = ? AND status = \'accepted\')'
-                : filter === 'mine'
-                  ? 'SELECT COUNT(*) as count FROM wall_posts WHERE author_id = ?'
-                  : 'SELECT COUNT(*) as count FROM wall_posts';
+              let countQuery, countParams;
+              if (filter === 'friends') {
+                countQuery = 'SELECT COUNT(*) as count FROM wall_posts WHERE user_id IN (SELECT friend_id FROM friendships WHERE user_id = ? AND status = \'accepted\')';
+                countParams = [req.user.id];
+              } else if (filter === 'mine') {
+                countQuery = 'SELECT COUNT(*) as count FROM wall_posts WHERE author_id = ?';
+                countParams = [req.user.id];
+              } else {
+                countQuery = 'SELECT COUNT(*) as count FROM wall_posts';
+                countParams = [];
+              }
 
-              db.get(countQuery, [req.user.id], (err, { count }) => {
+              db.get(countQuery, countParams, (err, row) => {
+                if (err) return res.status(500).json({ error: 'Ошибка сервера' });
+                const count = row ? row.count : 0;
                 res.json({ posts: result, hasMore: offset + limit < count });
               });
             }
@@ -174,15 +182,7 @@ router.post('/api/wall/:userId', authenticateToken, upload.single('image'), vali
             if (!err && post) {
               post.liked = false;
               post.comment_count = 0;
-              const { connectedUsers } = require('../socket/socket');
-              // Отправляем ВСЕМ подключённым клиентам (кроме отправителя)
-              connectedUsers.forEach((socketIds, uid) => {
-                if (uid !== req.user.id) {
-                  socketIds.forEach(sid => {
-                    require('../socket/socket').ioInstance?.to(sid).emit('new_post', post);
-                  });
-                }
-              });
+              broadcastNewPost(post, req.user.id);
             }
           }
         );

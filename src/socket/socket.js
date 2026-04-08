@@ -266,4 +266,18 @@ function sendNotification(userId, type, data) {
   }
 }
 
-module.exports = { setupSocket, connectedUsers, typingUsers, sendNotification, getConnectionCount };
+/**
+ * Отправляет уведомление о новом посте всем клиентам (кроме автора)
+ */
+function broadcastNewPost(post, authorId) {
+  if (!ioInstance) return;
+  connectedUsers.forEach((socketIds, uid) => {
+    if (uid !== authorId) {
+      socketIds.forEach(sid => {
+        ioInstance.to(sid).emit('new_post', post);
+      });
+    }
+  });
+}
+
+module.exports = { setupSocket, connectedUsers, typingUsers, sendNotification, getConnectionCount, broadcastNewPost };
