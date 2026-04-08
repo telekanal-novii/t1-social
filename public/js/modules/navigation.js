@@ -2,7 +2,7 @@
  * Навигация и SPA-роутинг
  */
 
-const VALID_PAGES = ['feed', 'profile', 'friends', 'messages', 'people'];
+const VALID_PAGES = ['feed', 'profile', 'friends', 'messages', 'people', 'music'];
 let currentPage = null;
 
 /**
@@ -39,6 +39,7 @@ function navigateTo(page, pushState = true) {
     friends: () => { loadFriends(); loadFriendRequests(); },
     messages: loadConversations,
     profile: loadProfile,
+    music: () => { if (typeof loadMusic === 'function') loadMusic(); },
   };
   loaders[page]?.();
 }

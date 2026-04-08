@@ -22,6 +22,7 @@ const userRoutes = require('./src/routes/user.routes');
 const friendRoutes = require('./src/routes/friend.routes');
 const messageRoutes = require('./src/routes/message.routes');
 const wallRoutes = require('./src/routes/wall.routes');
+const musicRoutes = require('./src/routes/music.routes');
 
 // Config
 const PORT = process.env.PORT || 3000;
@@ -125,9 +126,10 @@ app.use(userRoutes);
 app.use(friendRoutes);
 app.use(messageRoutes);
 app.use(wallRoutes);
+app.use(musicRoutes);
 
 // === SPA Fallback ===
-const validPages = ['feed', 'profile', 'friends', 'messages', 'people'];
+const validPages = ['feed', 'profile', 'friends', 'messages', 'people', 'music'];
 
 // Убираем trailing slash для SPA страниц
 app.use((req, res, next) => {

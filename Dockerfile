@@ -2,9 +2,9 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Зависимости для sharp (обработка изображений)
+# Зависимости для sharp (обработка изображений) и ffmpeg (сжатие аудио)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libvips42 \
+    libvips42 ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./

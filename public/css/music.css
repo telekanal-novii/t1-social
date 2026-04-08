@@ -1,0 +1,589 @@
+/* ===== GLOBAL MUSIC PLAYER ===== */
+.global-player {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 280px;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 20px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+  animation: slideUp .3s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.global-player-track {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 200px;
+  flex: 1;
+  min-width: 0;
+}
+
+.global-player-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.global-player-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.global-player-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.global-player-artist {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.global-player-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.gp-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.gp-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.gp-btn.gp-play {
+  width: 36px;
+  height: 36px;
+  background: var(--primary);
+}
+
+.gp-btn.gp-play:hover {
+  background: var(--primary-dark);
+}
+
+.gp-time {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  min-width: 80px;
+  text-align: center;
+}
+
+.global-player-progress {
+  position: relative;
+  height: 4px;
+  flex: 1;
+  max-width: 400px;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.global-player-progress:hover {
+  height: 6px;
+}
+
+.gp-progress {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 2px;
+  transition: width .1s linear;
+  pointer-events: none;
+}
+
+.global-player-volume {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.global-player-volume input[type="range"] {
+  width: 80px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.global-player-volume input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+  cursor: pointer;
+}
+
+/* ===== MUSIC PAGE ===== */
+.music-page-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding-bottom: 80px;
+}
+
+.music-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* Форма загрузки */
+.music-upload-form {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  margin-bottom: 24px;
+  animation: slideDown .3s ease;
+}
+
+.music-upload-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.music-upload-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.music-cancel-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.music-cancel-btn:hover {
+  background: var(--danger);
+  color: white;
+}
+
+.music-cancel-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.music-field {
+  margin-bottom: 16px;
+}
+
+.music-field label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.music-field input[type="text"],
+.music-field input[type="file"] {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-tertiary);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  transition: var(--transition);
+}
+
+.music-field input[type="text"]:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(99,102,241,.15);
+}
+
+.music-field input[type="file"] {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.music-field input[type="file"]::file-selector-button {
+  padding: 6px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: var(--transition);
+  margin-right: 10px;
+}
+
+.music-field input[type="file"]::file-selector-button:hover {
+  background: var(--border);
+}
+
+.music-error {
+  padding: 10px 14px;
+  background: rgba(239,68,68,.1);
+  border: 1px solid rgba(239,68,68,.2);
+  border-radius: 10px;
+  color: var(--danger);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.music-upload-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 20px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  font-family: inherit;
+}
+
+.music-upload-submit:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+}
+
+.music-upload-submit:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Список треков */
+.music-tracks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.music-track-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: var(--transition);
+}
+
+.music-track-item:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-light);
+}
+
+.music-track-item.playing {
+  border-color: var(--primary);
+  background: rgba(99,102,241,.06);
+}
+
+.music-track-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+.music-track-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.music-track-item.playing .music-track-icon {
+  background: rgba(99,102,241,.15);
+}
+
+.music-track-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.music-track-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.music-track-artist {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.music-track-duration {
+  font-size: 13px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  min-width: 40px;
+  text-align: right;
+}
+
+.music-track-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+.music-play-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.music-play-btn:hover {
+  background: var(--primary-dark);
+  transform: scale(1.1);
+}
+
+.music-delete-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.music-delete-btn:hover {
+  background: rgba(239,68,68,.1);
+  border-color: rgba(239,68,68,.2);
+  color: var(--danger);
+}
+
+/* Пустое состояние */
+.music-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.music-empty svg {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 16px;
+  opacity: .4;
+}
+
+.music-empty p {
+  font-size: 16px;
+  margin: 0;
+}
+
+.music-empty-hint {
+  font-size: 14px !important;
+  opacity: .6;
+  margin-top: 8px !important;
+}
+
+/* Мобильный адаптив */
+@media (max-width: 1024px) {
+  .global-player {
+    right: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .global-player {
+    padding: 8px 12px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .global-player-track {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .global-player-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .global-player-title {
+    font-size: 13px;
+  }
+
+  .global-player-artist {
+    font-size: 11px;
+  }
+
+  .global-player-progress {
+    order: 10;
+    width: 100%;
+    max-width: none;
+    margin-top: 4px;
+  }
+
+  .global-player-volume {
+    display: none;
+  }
+
+  .gp-time {
+    font-size: 11px;
+    min-width: 70px;
+  }
+
+  .gp-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .gp-btn.gp-play {
+    width: 32px;
+    height: 32px;
+  }
+
+  .music-track-item {
+    padding: 12px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .music-track-duration {
+    display: none;
+  }
+
+  .music-track-actions {
+    margin-left: auto;
+  }
+
+  .music-upload-form {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .music-page-header {
+    margin-bottom: 16px;
+  }
+
+  .music-track-item {
+    padding: 10px;
+  }
+
+  .music-track-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+
+  .music-track-title {
+    font-size: 14px;
+  }
+
+  .music-track-artist {
+    font-size: 12px;
+  }
+
+  .music-play-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .music-delete-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .music-empty {
+    padding: 40px 16px;
+  }
+
+  .music-empty svg {
+    width: 48px;
+    height: 48px;
+  }
+
+  .music-empty p {
+    font-size: 14px;
+  }
+}

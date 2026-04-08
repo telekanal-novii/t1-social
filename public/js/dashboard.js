@@ -68,6 +68,7 @@
       if (typeof currentPage === 'undefined') return;
       if (currentPage === 'feed') loadAllUsers();
       if (currentPage === 'friends') { loadFriendRequests(); loadFriends(); }
+      if (currentPage === 'music' && typeof loadMusic === 'function') loadMusic();
     }, 30000);
 
     setInterval(loadFriendRequestsCount, 10000);

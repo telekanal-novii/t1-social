@@ -9,7 +9,8 @@
 | `dotenv` | Загрузка .env переменных |
 | `express` | Веб-сервер |
 | `express-rate-limit` | Rate limiting |
-| `helmet` | Security headers (CSP, X-Frame-Options, HSTS) |
+| `fluent-ffmpeg` | Сжатие/конвертация аудио в MP3 |
+| `helmet` | Security headers |
 | `jsonwebtoken` | JWT аутентификация |
 | `multer` | Загрузка файлов |
 | `sharp` | Сжатие изображений |
