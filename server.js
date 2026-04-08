@@ -67,7 +67,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
       imgSrc: ["'self'", 'data:', 'blob:'],
-      mediaSrc: ["'self'"],
+      mediaSrc: ["'self'", 'blob:'],
       connectSrc: ["'self'"],
       frameSrc: ["'none'"],
       frameAncestors: ["'self'", "https://huggingface.co", "https://*.hf.space"],
