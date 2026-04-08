@@ -2,6 +2,11 @@ FROM node:20-slim
 
 WORKDIR /app
 
+# Зависимости для sharp (обработка изображений)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libvips42 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY package*.json ./
 RUN npm install --production
 

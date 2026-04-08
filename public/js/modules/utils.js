@@ -199,3 +199,24 @@ if (!$('#slide-anim-style')) {
   s.textContent = '@keyframes slideIn{from{transform:translateX(400px);opacity:0}to{transform:translateX(0);opacity:1}}@keyframes slideOut{from{transform:translateX(0);opacity:1}to{transform:translateX(400px);opacity:0}}@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}@keyframes bubbleIn{from{opacity:0;transform:translateY(12px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}';
   document.head.appendChild(s);
 }
+
+// ======================== УВЕДОМЛЕНИЯ В РЕАЛЬНОМ ВРЕМЕНИ ========================
+
+// Debounce для уведомлений (не спамить одинаковыми)
+const _notifTimers = {};
+socket.on('notification', (data) => {
+  const key = `${data.type}-${data.fromUserId}`;
+  if (_notifTimers[key]) return;
+  _notifTimers[key] = setTimeout(() => delete _notifTimers[key], 5000);
+
+  const msgs = {
+    new_message: `${data.fromUsername || 'Пользователь'}: ${data.content?.substring(0, 60) || 'Новое сообщение'}`,
+    friend_request: `${data.fromUsername || 'Пользователь'} хочет добавить вас в друзья`,
+    friend_accepted: `${data.fromUsername || 'Пользователь'} принял вашу заявку`
+  };
+  if (msgs[data.type]) notify(msgs[data.type], 'info');
+
+  // Обновляем счётчики
+  if (data.type === 'friend_request' && typeof loadFriendRequestsCount === 'function') loadFriendRequestsCount();
+  if (data.type === 'new_message' && typeof loadMessagesCount === 'function') loadMessagesCount();
+});

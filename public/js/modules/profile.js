@@ -2,6 +2,60 @@
  * Свой профиль, стена, каталог людей
  */
 
+/**
+ * Генерирует HTML карточки поста
+ * @param {Object} p — данные поста
+ * @param {number} userId — ID текущего пользователя
+ * @param {boolean} showComments — показывать контейнер комментариев
+ * @returns {string}
+ */
+function postCardHTML(p, userId, showComments = false) {
+  const t = parseUTC(p.created_at).toLocaleString('ru', MOSCOW_DT);
+  const own = p.author_id == userId;
+  const lk = !!p.liked;
+  const cc = p.comment_count || 0;
+  const commentsStyle = showComments && cc > 0 ? '' : ' style="display:none;"';
+  const av = p.avatar
+    ? `<a href="/${esc(p.username)}" class="post-author-link" data-username="${esc(p.username)}"><div class="wall-post-avatar"><img src="${sanitizeUrl(esc(p.avatar))}" alt=""></div></a>`
+    : `<a href="/${esc(p.username)}" class="post-author-link" data-username="${esc(p.username)}"><div class="wall-post-avatar-placeholder">${initials(p.display_name || p.username)}</div></a>`;
+  const imgHTML = p.image_url
+    ? `<div class="wall-post-image"><img src="${sanitizeUrl(esc(p.image_url))}" alt="" loading="lazy" data-action="view-media" data-url="${esc(p.image_url)}" data-type="image"></div>`
+    : '';
+  const actionBtns = own
+    ? `<button class="wall-post-action-btn edit-post" data-post-id="${p.id}" title="Редактировать"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button><button class="wall-post-action-btn delete-post" data-post-id="${p.id}" title="Удалить"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>`
+    : '';
+
+  return `<div class="wall-post-card" data-post-id="${p.id}">
+    <div class="wall-post-header">
+      ${av}
+      <div class="wall-post-author">
+        <a href="/${esc(p.username)}" class="wall-post-author-name post-author-link" data-username="${esc(p.username)}">${esc(p.display_name || p.username)}</a>
+      </div>
+      <div class="wall-post-time">${t}</div>
+      ${actionBtns}
+    </div>
+    <div class="wall-post-content" data-post-id="${p.id}">${esc(p.content || '')}</div>${imgHTML}
+    <div class="wall-post-actions">
+      <button class="wall-post-action-btn like-post ${lk ? 'liked' : ''}" data-post-id="${p.id}" data-likes="${p.likes}">
+        <svg viewBox="0 0 24 24" fill="${lk ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+        <span>${p.likes || 0}</span>
+      </button>
+      <button class="wall-post-action-btn toggle-comments" data-post-id="${p.id}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        <span>Комментарии</span>
+        ${cc > 0 ? `<span class="comment-count-badge">${cc}</span>` : ''}
+      </button>
+    </div>
+    <div class="post-comments" data-post-id="${p.id}"${commentsStyle}>
+      <div class="comments-list" data-post-id="${p.id}"></div>
+      <div class="comment-form">
+        <input type="text" class="comment-input" data-post-id="${p.id}" placeholder="Написать комментарий..." maxlength="300">
+        <button class="submit-comment" data-post-id="${p.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></button>
+      </div>
+    </div>
+  </div>`;
+}
+
 // ======================== ЛЕНТА ========================
 
 async function loadAllUsers() {
@@ -36,49 +90,7 @@ window.renderFeedPosts = async function(container, posts) {
     if (!p.liked) { state.likedPosts.delete(p.id); saveLikes(); }
   });
 
-  // Рендерим посты
-  container.innerHTML = posts.map(p => {
-    const t = new Date(p.created_at).toLocaleString('ru', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const own = p.author_id == userId;
-    const lk = !!p.liked;
-    const cc = p.comment_count || 0;
-    const av = p.avatar
-      ? `<a href="/${esc(p.username)}" class="post-author-link" data-username="${esc(p.username)}"><div class="wall-post-avatar"><img src="${sanitizeUrl(esc(p.avatar))}" alt=""></div></a>`
-      : `<a href="/${esc(p.username)}" class="post-author-link" data-username="${esc(p.username)}"><div class="wall-post-avatar-placeholder">${initials(p.display_name || p.username)}</div></a>`;
-
-    // Если есть комментарии — показываем контейнер сразу
-    const commentsStyle = cc > 0 ? '' : ' style="display:none;"';
-
-    return `<div class="wall-post-card" data-post-id="${p.id}">
-      <div class="wall-post-header">
-        ${av}
-        <div class="wall-post-author">
-          <a href="/${esc(p.username)}" class="wall-post-author-name post-author-link" data-username="${esc(p.username)}">${esc(p.display_name || p.username)}</a>
-        </div>
-        <div class="wall-post-time">${t}</div>
-        ${own ? `<button class="wall-post-action-btn delete-post" data-post-id="${p.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>` : ''}
-      </div>
-      <div class="wall-post-content">${esc(p.content)}</div>
-      <div class="wall-post-actions">
-        <button class="wall-post-action-btn like-post ${lk ? 'liked' : ''}" data-post-id="${p.id}" data-likes="${p.likes}">
-          <svg viewBox="0 0 24 24" fill="${lk ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
-          <span>${p.likes || 0}</span>
-        </button>
-        <button class="wall-post-action-btn toggle-comments" data-post-id="${p.id}">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-          <span>Комментарии</span>
-          ${cc > 0 ? `<span class="comment-count-badge">${cc}</span>` : ''}
-        </button>
-      </div>
-      <div class="post-comments" data-post-id="${p.id}"${commentsStyle}>
-        <div class="comments-list" data-post-id="${p.id}"></div>
-        <div class="comment-form">
-          <input type="text" class="comment-input" data-post-id="${p.id}" placeholder="Написать комментарий..." maxlength="300">
-          <button class="submit-comment" data-post-id="${p.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></button>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
+  container.innerHTML = posts.map(p => postCardHTML(p, userId)).join('');
 
   // Загружаем превью комментариев только для видимых контейнеров (где cc > 0)
   container.querySelectorAll('.post-comments').forEach(el => {
@@ -102,7 +114,7 @@ async function loadCommentsPreview(container) {
 
         const limit = 3;
         comments.slice(0, limit).forEach(c => {
-            const t = new Date(c.created_at).toLocaleString('ru', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+            const t = parseUTC(c.created_at).toLocaleString('ru', MOSCOW_TIME);
             const av = c.avatar
                 ? `<div class="comment-avatar"><img src="${sanitizeUrl(esc(c.avatar))}"></div>`
                 : `<div class="comment-avatar-placeholder">${initials(c.display_name || c.username)}</div>`;
@@ -116,7 +128,7 @@ async function loadCommentsPreview(container) {
                     </div>
                     <div class="comment-text">${esc(c.content)}</div>
                 </div>
-                ${c.user_id == userId ? `<button class="delete-comment" data-comment-id="${c.id}" data-post-id="${postId}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg></button>` : ''}
+                ${c.user_id == userId ? `<button class="edit-comment" data-comment-id="${c.id}" data-post-id="${postId}" title="Редактировать"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button><button class="delete-comment" data-comment-id="${c.id}" data-post-id="${postId}" title="Удалить"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg></button>` : ''}
             `;
             list.appendChild(el);
         });
@@ -183,6 +195,21 @@ $('#people-search')?.addEventListener('input', e => {
 
 // ======================== СВОЙ ПРОФИЛЬ ========================
 
+/**
+ * Обновляет аватарку и имя в сайдбаре (user-card).
+ * Вызывается при каждой загрузке dashboard.
+ */
+async function updateUserCard() {
+  try {
+    const p = await api('/api/profile');
+    $('#sidebar-username').textContent = p.display_name || p.username;
+    if (p.avatar) {
+      const sb = $('#sidebar-avatar');
+      if (sb) { sb.querySelector('img').src = p.avatar; sb.style.display = 'block'; $('#sidebar-avatar-placeholder').style.display = 'none'; }
+    }
+  } catch (e) { console.error('updateUserCard:', e); }
+}
+
 async function loadProfile() {
   try {
     const p = await api('/api/profile');
@@ -199,11 +226,6 @@ async function loadProfile() {
       // Главная (лента)
       $('#feed-post-avatar').src = p.avatar; $('#feed-post-avatar').style.display = 'block';
       $('#feed-post-avatar-placeholder').style.display = 'none';
-    }
-    $('#sidebar-username').textContent = p.display_name || p.username;
-    if (p.avatar) {
-      const sb = $('#sidebar-avatar');
-      if (sb) { sb.querySelector('img').src = p.avatar; sb.style.display = 'block'; $('#sidebar-avatar-placeholder').style.display = 'none'; }
     }
     $('#edit-displayname').value = p.display_name || '';
     $('#edit-bio').value = p.bio || '';
@@ -285,18 +307,8 @@ async function loadWall(uid = userId, cid = 'wall-posts') {
     }
     c.innerHTML = posts.map(p => {
       // Синхронизируем state с сервером
-      if (!p.liked) {
-        state.likedPosts.delete(p.id); saveLikes();
-      }
-      const t = new Date(p.created_at).toLocaleString('ru', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-      const own = p.author_id == userId;
-      const lk = !!p.liked;
-      const cc = p.comment_count || 0;
-      const commentsStyle = cc > 0 ? '' : ' style="display:none;"';
-      const av = p.avatar
-        ? `<a href="/${esc(p.username)}" class="post-author-link" data-username="${esc(p.username)}"><div class="wall-post-avatar"><img src="${sanitizeUrl(esc(p.avatar))}" alt=""></div></a>`
-        : `<a href="/${esc(p.username)}" class="post-author-link" data-username="${esc(p.username)}"><div class="wall-post-avatar-placeholder">${initials(p.display_name || p.username)}</div></a>`;
-      return `<div class="wall-post-card"><div class="wall-post-header">${av}<div class="wall-post-author"><a href="/${esc(p.username)}" class="wall-post-author-name post-author-link" data-username="${esc(p.username)}">${esc(p.display_name || p.username)}</a></div><div class="wall-post-time">${t}</div>${own ? `<button class="wall-post-action-btn delete-post" data-post-id="${p.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>` : ''}</div><div class="wall-post-content">${esc(p.content)}</div><div class="wall-post-actions"><button class="wall-post-action-btn like-post ${lk ? 'liked' : ''}" data-post-id="${p.id}" data-likes="${p.likes}"><svg viewBox="0 0 24 24" fill="${lk ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg><span>${p.likes || 0}</span></button><button class="wall-post-action-btn toggle-comments" data-post-id="${p.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><span>Комментарии</span>${cc > 0 ? `<span class="comment-count-badge">${cc}</span>` : ''}</button></div><div class="post-comments" data-post-id="${p.id}"${commentsStyle}><div class="comments-list" data-post-id="${p.id}"></div><div class="comment-form"><input type="text" class="comment-input" data-post-id="${p.id}" placeholder="Написать комментарий..." maxlength="300"><button class="submit-comment" data-post-id="${p.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></button></div></div></div>`;
+      if (!p.liked) { state.likedPosts.delete(p.id); saveLikes(); }
+      return postCardHTML(p, userId, true);
     }).join('');
 
     // Загружаем превью комментариев для каждого поста
@@ -307,12 +319,7 @@ async function loadWall(uid = userId, cid = 'wall-posts') {
 }
 
 // Публикация поста на главной
-$('#feed-publish-btn')?.addEventListener('click', () => {
-  const ta = $('#feed-post-content');
-  const content = ta?.value.trim();
-  if (!content || content.length > 500) return notify('Максимум 500 символов', 'error');
-  publishPost(userId, 'feed-post-content', 'feed-char-count', 'feed-posts');
-});
+$('#feed-publish-btn')?.addEventListener('click', () => publishPost(userId, 'feed-post-content', 'feed-char-count', 'feed-posts'));
 
 // Счётчик символов на главной
 $('#feed-post-content')?.addEventListener('input', e => {
@@ -326,17 +333,155 @@ $('#feed-post-content')?.addEventListener('input', e => {
 // Публикация поста на своей стене
 $('#publish-post-btn')?.addEventListener('click', () => publishPost());
 async function publishPost(uid = userId, inId = 'post-content', ctrId = 'char-count', wId = 'wall-posts') {
-  const ta = $(`#${inId}`), content = ta.value.trim();
-  if (!content || content.length > 500) return notify('Максимум 500 символов', 'error');
+  const ta = $(`#${inId}`);
+  const content = ta?.value.trim();
+  const fileId = inId === 'feed-post-content' ? 'feed-post-file' : inId === 'other-post-content' ? 'other-post-file' : 'post-file';
+  const fileInput = $(`#${fileId}`);
+  const file = fileInput?.files?.[0];
+
+  if (!content && !file) return notify('Добавьте текст или изображение', 'error');
+  if (content && content.length > 500) return notify('Максимум 500 символов', 'error');
+
+  const fd = new FormData();
+  if (content) fd.append('content', content);
+  if (file) fd.append('image', file);
+
   try {
-    await api(`/api/wall/${uid}`, { method: 'POST', body: JSON.stringify({ content }) });
+    await fetch(`/api/wall/${uid}`, {
+      method: 'POST',
+      credentials: 'include',
+      body: fd
+    }).then(r => {
+      if (!r.ok) return r.json().then(d => { throw new Error(d.error); });
+      return r.json();
+    });
+
     ta.value = '';
     $(`#${ctrId}`).textContent = '0/500';
+
+    // Очищаем превью изображения
+    const cleanupMap = {
+      'feed-post-content': { preview: 'feed-post-image-preview', file: 'feed-post-file' },
+      'post-content': { preview: 'post-image-preview', file: 'post-file' },
+      'other-post-content': { preview: 'other-post-image-preview', file: 'other-post-file' }
+    };
+    const cleanup = cleanupMap[inId];
+    if (cleanup) {
+      const preview = $(`#${cleanup.preview}`);
+      if (preview) preview.style.display = 'none';
+      const fi = $(`#${cleanup.file}`);
+      if (fi) fi.value = '';
+    }
+
     if (wId === 'feed-posts') loadAllUsers();
     else await loadWall(uid, wId);
     notify('Пост опубликован!');
   } catch (e) { notify('Ошибка: ' + e.message, 'error'); }
 }
+
+// Прикрепление изображений к постам
+$$('.btn-attach-post').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.target;
+    const fileInput = $(`#${target === 'feed' ? 'feed-post-file' : target === 'other' ? 'other-post-file' : 'post-file'}`);
+    fileInput?.click();
+  });
+});
+
+// Обработка выбора файла
+['feed-post-file', 'post-file', 'other-post-file'].forEach(fileId => {
+  const el = $(`#${fileId}`);
+  if (!el) return;
+  el.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      notify('Только изображения', 'error');
+      e.target.value = '';
+      return;
+    }
+
+    // Маппинг ID файла → ID превью
+    const mapping = {
+      'feed-post-file': { preview: 'feed-post-image-preview', img: 'feed-post-image' },
+      'post-file': { preview: 'post-image-preview', img: 'post-image' },
+      'other-post-file': { preview: 'other-post-image-preview', img: 'other-post-image' }
+    };
+    const m = mapping[fileId];
+
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = $(`#${m.img}`);
+      const preview = $(`#${m.preview}`);
+      if (img) img.src = ev.target.result;
+      if (preview) preview.style.display = 'flex';
+    };
+    reader.readAsDataURL(file);
+  });
+});
+
+// Drag & Drop для постов
+(function initPostDragDrop() {
+  const forms = [
+    { card: () => document.querySelector('#feed-page > .post-form-card'), file: 'feed-post-file', preview: 'feed-post-image-preview', img: 'feed-post-image' },
+    { card: () => document.querySelector('.profile-page-modern > .post-form-card'), file: 'post-file', preview: 'post-image-preview', img: 'post-image' },
+    { card: () => $('#other-post-form'), file: 'other-post-file', preview: 'other-post-image-preview', img: 'other-post-image' }
+  ];
+
+  forms.forEach(({ card: getCard, file: fileId, preview: previewId, img: imgId }) => {
+    setTimeout(() => {
+      const card = getCard();
+      if (!card) return;
+
+      ['dragenter', 'dragover'].forEach(evt => {
+        card.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); card.classList.add('drag-over'); });
+      });
+      ['dragleave', 'drop'].forEach(evt => {
+        card.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); card.classList.remove('drag-over'); });
+      });
+      card.addEventListener('drop', e => {
+        e.preventDefault();
+        const fileInput = $(`#${fileId}`);
+        if (!fileInput) return;
+        const files = [...(e.dataTransfer?.files || [])];
+        const imgFile = files.find(f => f.type.startsWith('image/'));
+        if (!imgFile) return notify('Только изображения', 'error');
+
+        const dt = new DataTransfer();
+        dt.items.add(imgFile);
+        fileInput.files = dt.files;
+
+        const reader = new FileReader();
+        reader.onload = ev => {
+          const img = $(`#${imgId}`);
+          const preview = $(`#${previewId}`);
+          if (img) img.src = ev.target.result;
+          if (preview) preview.style.display = 'flex';
+        };
+        reader.readAsDataURL(imgFile);
+      });
+    }, 200);
+  });
+})();
+
+// Удаление превью изображения
+$$('.post-image-remove').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.target;
+    const mapping = {
+      feed: { preview: 'feed-post-image-preview', file: 'feed-post-file' },
+      post: { preview: 'post-image-preview', file: 'post-file' },
+      other: { preview: 'other-post-image-preview', file: 'other-post-file' }
+    };
+    const m = mapping[target];
+    if (!m) return;
+    const preview = $(`#${m.preview}`);
+    if (preview) preview.style.display = 'none';
+    const fileInput = $(`#${m.file}`);
+    if (fileInput) fileInput.value = '';
+  });
+});
 
 // Счётчик символов
 ['post-content', 'other-post-content'].forEach((id, i) => {
@@ -347,6 +492,12 @@ async function publishPost(uid = userId, inId = 'post-content', ctrId = 'char-co
     ctr.classList.remove('warning', 'error');
     if (c > 450) ctr.classList.add('error'); else if (c > 400) ctr.classList.add('warning');
   });
+});
+
+// Публикация на стене другого пользователя
+$('#other-publish-post-btn')?.addEventListener('click', () => {
+  if (!state.otherUserId) return notify('Откройте профиль пользователя', 'error');
+  publishPost(state.otherUserId, 'other-post-content', 'other-char-count', 'other-wall-posts');
 });
 
 // Комментарии
@@ -370,7 +521,7 @@ window.loadComments = async function(postId, card, showAll = false) {
     const shown = comments.slice(0, limit);
 
     shown.forEach(c => {
-      const t = new Date(c.created_at).toLocaleString('ru', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const t = parseUTC(c.created_at).toLocaleString('ru', MOSCOW_TIME);
       const av = c.avatar
         ? `<div class="comment-avatar"><img src="${sanitizeUrl(esc(c.avatar))}"></div>`
         : `<div class="comment-avatar-placeholder">${initials(c.display_name || c.username)}</div>`;
@@ -385,7 +536,7 @@ window.loadComments = async function(postId, card, showAll = false) {
           </div>
           <div class="comment-text">${esc(c.content)}</div>
         </div>
-        ${c.user_id == userId ? `<button class="delete-comment" data-comment-id="${c.id}" data-post-id="${postId}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg></button>` : ''}
+        ${c.user_id == userId ? `<button class="edit-comment" data-comment-id="${c.id}" data-post-id="${postId}" title="Редактировать"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button><button class="delete-comment" data-comment-id="${c.id}" data-post-id="${postId}" title="Удалить"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg></button>` : ''}
       `;
       list.appendChild(el);
     });

@@ -128,6 +128,16 @@ app.use(wallRoutes);
 
 // === SPA Fallback ===
 const validPages = ['feed', 'profile', 'friends', 'messages', 'people'];
+
+// Убираем trailing slash для SPA страниц
+app.use((req, res, next) => {
+  const pathWithoutSlash = req.path.endsWith('/') ? req.path.slice(0, -1) : req.path;
+  if (validPages.includes(pathWithoutSlash.slice(1)) && req.path.endsWith('/')) {
+    return res.redirect(301, pathWithoutSlash);
+  }
+  next();
+});
+
 app.get('/:page', (req, res) => {
   const page = req.params.page;
   if (validPages.includes(page) || (page !== 'dashboard.html' && !page.includes('.'))) {
@@ -184,6 +194,18 @@ const gracefulShutdown = (signal) => {
     process.exit(1);
   }, 10000);
 };
+
+// Глобальные обработчики ошибок
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️ Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('⚠️ Uncaught Exception:', err);
+  gracefulShutdown('uncaughtException');
+});
+
+// Graceful shutdown signals
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));

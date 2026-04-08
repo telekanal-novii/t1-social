@@ -12,6 +12,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../../config/database');
 const { authenticateToken } = require('../middleware/auth');
+const { sendNotification } = require('../socket/socket');
 
 /** Список друзей */
 router.get('/api/friends', authenticateToken, (req, res) => {
@@ -75,6 +76,11 @@ router.post('/api/friends/request', authenticateToken, (req, res) => {
             ? res.status(400).json({ error: 'Заявка уже отправлена' })
             : res.status(500).json({ error: 'Ошибка отправки заявки' });
         }
+        // Уведомление получателю
+        sendNotification(friendId, 'friend_request', {
+          fromUserId: req.user.id,
+          fromUsername: req.user.username
+        });
         res.json({ success: true, friendshipId: this.lastID });
       });
   });
@@ -92,7 +98,14 @@ router.put('/api/friends/accept/:id', authenticateToken, (req, res) => {
       if (err) return res.status(500).json({ error: 'Ошибка обновления' });
       // Удаляем встречную заявку
       db.run("DELETE FROM friendships WHERE user_id = ? AND friend_id = ? AND status = 'pending'",
-        [req.user.id, friendId], () => res.json({ success: true }));
+        [req.user.id, friendId], () => {
+          // Уведомление отправителю заявки
+          sendNotification(friendId, 'friend_accepted', {
+            fromUserId: req.user.id,
+            fromUsername: req.user.username
+          });
+          res.json({ success: true });
+        });
     });
   });
 });

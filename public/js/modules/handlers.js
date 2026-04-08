@@ -153,6 +153,116 @@ document.addEventListener('click', async e => {
     return;
   }
 
+  // ======================== РЕДАКТИРОВАТЬ ПОСТ ========================
+  const editPostBtn = e.target.closest('.edit-post');
+  if (editPostBtn) {
+    e.preventDefault(); e.stopPropagation();
+    const postId = editPostBtn.dataset.postId;
+    const card = editPostBtn.closest('.wall-post-card');
+    const contentEl = card.querySelector('.wall-post-content');
+    if (!contentEl || card.dataset.editing) return;
+    card.dataset.editing = '1';
+
+    const original = contentEl.textContent;
+    card.dataset.originalContent = original;
+    contentEl.innerHTML = `<textarea class="edit-post-textarea" style="width:100%;min-height:60px;padding:10px;border:1.5px solid var(--border-color);border-radius:10px;background:var(--bg-tertiary);color:var(--text-primary);font-size:14px;font-family:inherit;resize:vertical;outline:none;">${esc(original)}</textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end;">
+        <button class="cancel-edit-post" style="padding:6px 14px;border-radius:8px;border:1px solid var(--border-color);background:transparent;color:var(--text-primary);cursor:pointer;font-size:13px;">Отмена</button>
+        <button class="save-edit-post" data-post-id="${postId}" style="padding:6px 14px;border-radius:8px;border:none;background:var(--primary);color:white;cursor:pointer;font-size:13px;font-weight:600;">Сохранить</button>
+      </div>`;
+    const ta = contentEl.querySelector('.edit-post-textarea');
+    ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+    return;
+  }
+
+  // Сохранить редактируемый пост
+  const savePostBtn = e.target.closest('.save-edit-post');
+  if (savePostBtn) {
+    e.preventDefault(); e.stopPropagation();
+    const postId = savePostBtn.dataset.postId;
+    const card = savePostBtn.closest('.wall-post-card');
+    const contentEl = card.querySelector('.wall-post-content');
+    const ta = contentEl.querySelector('.edit-post-textarea');
+    const newContent = ta.value.trim();
+    if (!newContent || newContent.length > 500) return notify('Максимум 500 символов', 'error');
+
+    try {
+      await api(`/api/wall/${postId}`, { method: 'PUT', body: JSON.stringify({ content: newContent }) });
+      contentEl.textContent = newContent;
+      delete card.dataset.editing;
+      delete card.dataset.originalContent;
+      notify('Пост обновлен');
+    } catch { notify('Ошибка', 'error'); delete card.dataset.editing; delete card.dataset.originalContent; }
+    return;
+  }
+
+  // Отменить редактирование поста
+  if (e.target.closest('.cancel-edit-post')) {
+    e.preventDefault(); e.stopPropagation();
+    const card = e.target.closest('.wall-post-card');
+    if (card) {
+      delete card.dataset.editing;
+      if (card.closest('#feed-posts')) loadAllUsers();
+      else loadWall();
+    }
+    return;
+  }
+
+  // ======================== РЕДАКТИРОВАТЬ КОММЕНТАРИЙ ========================
+  const editCommentBtn = e.target.closest('.edit-comment');
+  if (editCommentBtn) {
+    e.preventDefault(); e.stopPropagation();
+    const commentId = editCommentBtn.dataset.commentId;
+    const postId = editCommentBtn.dataset.postId;
+    const commentItem = editCommentBtn.closest('.comment-item');
+    const textEl = commentItem.querySelector('.comment-text');
+    if (!textEl || commentItem.dataset.editing) return;
+    commentItem.dataset.editing = '1';
+
+    const original = textEl.textContent;
+    textEl.innerHTML = `<textarea class="edit-comment-textarea" style="width:100%;min-height:36px;padding:8px;border:1.5px solid var(--border-color);border-radius:8px;background:var(--bg-tertiary);color:var(--text-primary);font-size:13px;font-family:inherit;resize:vertical;outline:none;">${esc(original)}</textarea>
+      <div style="display:flex;gap:6px;margin-top:6px;justify-content:flex-end;">
+        <button class="cancel-edit-comment" style="padding:4px 10px;border-radius:6px;border:1px solid var(--border-color);background:transparent;color:var(--text-primary);cursor:pointer;font-size:12px;">Отмена</button>
+        <button class="save-edit-comment" data-comment-id="${commentId}" data-post-id="${postId}" style="padding:4px 10px;border-radius:6px;border:none;background:var(--primary);color:white;cursor:pointer;font-size:12px;font-weight:600;">Сохранить</button>
+      </div>`;
+    const ta = textEl.querySelector('.edit-comment-textarea');
+    ta.focus();
+    return;
+  }
+
+  // Сохранить редактируемый комментарий
+  const saveCommentBtn = e.target.closest('.save-edit-comment');
+  if (saveCommentBtn) {
+    e.preventDefault(); e.stopPropagation();
+    const commentId = saveCommentBtn.dataset.commentId;
+    const postId = saveCommentBtn.dataset.postId;
+    const commentItem = saveCommentBtn.closest('.comment-item');
+    const textEl = commentItem.querySelector('.comment-text');
+    const ta = textEl.querySelector('.edit-comment-textarea');
+    const newContent = ta.value.trim();
+    if (!newContent || newContent.length > 300) return notify('Максимум 300 символов', 'error');
+
+    try {
+      await api(`/api/wall/comment/${commentId}`, { method: 'PUT', body: JSON.stringify({ content: newContent }) });
+      textEl.textContent = newContent;
+      delete commentItem.dataset.editing;
+      notify('Комментарий обновлен');
+    } catch { notify('Ошибка', 'error'); delete commentItem.dataset.editing; }
+    return;
+  }
+
+  // Отменить редактирование комментария
+  if (e.target.closest('.cancel-edit-comment')) {
+    e.preventDefault(); e.stopPropagation();
+    const commentItem = e.target.closest('.comment-item');
+    if (commentItem) {
+      delete commentItem.dataset.editing;
+      const postId = e.target.closest('.comment-item')?.querySelector('.save-edit-comment')?.dataset.postId;
+      await loadComments(postId, commentItem.closest('.wall-post-card'));
+    }
+    return;
+  }
+
   const button = e.target.closest('[data-action]');
   if (!button) return;
 

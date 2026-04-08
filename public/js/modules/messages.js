@@ -115,6 +115,7 @@ socket.on('user_status', ({ userId, status }) => {
 
 async function loadConversations() {
   try {
+    resetChatView();
     const convs = await api('/api/conversations');
     const c = $('#conversations-list');
     if (!convs.length) {
@@ -123,7 +124,7 @@ async function loadConversations() {
     }
     c.innerHTML = convs.map(f => {
       const last = f.last_message ? (f.last_message.length > 40 ? f.last_message.substring(0, 40) + '...' : f.last_message) : 'Нет сообщений';
-      const time = f.last_message_at ? new Date(f.last_message_at).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' }) : '';
+      const time = f.last_message_at ? parseUTC(f.last_message_at).toLocaleTimeString('ru', MOSCOW_CLOCK) : '';
       const fromMe = f.last_sender_id == userId;
       const activeClass = f.id == state.chatUserId ? ' active' : '';
       return `<div class="conversation-item-modern${activeClass}" data-chat-id="${f.id}" data-chat-name="${esc(f.display_name || f.username)}" data-chat-avatar="${esc(f.avatar || '')}" data-chat-username="${esc(f.username)}"><div class="conversation-avatar-wrapper">${avatarHTML(f, 'conversation')}</div><div class="conversation-info"><div class="conversation-item-top"><a href="/${esc(f.username)}" class="conversation-item-name post-author-link" data-username="${esc(f.username)}">${esc(f.display_name || f.username)}</a>${time ? `<div class="conversation-time">${time}</div>` : ''}</div><div class="conversation-item-bottom"><div class="last-message-text ${fromMe ? 'sent' : ''}">${fromMe ? 'Вы: ' : ''}${esc(last)}</div>${f.unread_count > 0 ? `<div class="unread-badge">${f.unread_count}</div>` : ''}</div></div></div>`;
@@ -132,6 +133,11 @@ async function loadConversations() {
 }
 
 // ======================== ОТКРЫТИЕ ЧАТА ========================
+
+// Сброс chat-open при загрузке страницы сообщений
+function resetChatView() {
+  document.querySelector('.messenger-layout')?.classList.remove('chat-open');
+}
 
 window.openChat = async function(fId, fName, fAvatar, fUsername = '') {
   state.chatUserId = fId;
@@ -143,9 +149,16 @@ window.openChat = async function(fId, fName, fAvatar, fUsername = '') {
   $('#messages-page')?.classList.add('active');
   history.pushState({ page: 'messages' }, '', '/messages');
 
+  resetChatView();
+
   // Показываем чат
   $('#chat-empty').style.display = 'none';
   $('#chat-active').style.display = 'flex';
+
+  // Мобильный: переключаем на экран чата
+  if (window.innerWidth <= 768) {
+    document.querySelector('.messenger-layout')?.classList.add('chat-open');
+  }
 
   const el = $('#chat-username');
   if (fUsername) el.innerHTML = `<a href="/${esc(fUsername)}" class="chat-user-link post-author-link" data-username="${esc(fUsername)}">${esc(fName)}</a>`;
@@ -219,12 +232,30 @@ async function loadMessages(fid, prepend = false) {
 }
 
 /**
- * Рендерит одно сообщение в bubble
+ * Рендерит одно сообщение в bubble и добавляет в DOM
+ * @param {Object} m — сообщение
+ * @param {string} cls — CSS класс ('sent' или 'received')
  */
-async function renderMessageBubble(m) {
+async function appendMessageBubble(m, cls) {
+  const html = await renderMessageBubble(m);
+  const c = $('#chat-messages');
+  if (!c) return;
+  const div = document.createElement('div');
+  div.className = `message-bubble ${cls}`;
+  div.innerHTML = html;
+  c.appendChild(div);
+  const player = div.querySelector('.audio-player');
+  if (player) initAudioDuration(player);
+  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+/**
+ * Рендерит HTML одного сообщения (bubble)
+ */
+window.renderMessageBubble = async function(m) {
   const isSent = m.sender_id == userId;
-  const t = new Date(m.created_at).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
-  const safeUrl = sanitizeUrl(esc(m.file_url));
+  const t = parseUTC(m.created_at).toLocaleTimeString('ru', MOSCOW_CLOCK);
+  const safeUrl = sanitizeUrl(m.file_url);
 
   // E2E расшифровка
   let displayContent = m.content;
@@ -233,7 +264,7 @@ async function renderMessageBubble(m) {
   }
 
   let fileHTML = '';
-  if (m.type === 'image') fileHTML = `<div class="msg-file"><img src="${safeUrl}" class="msg-image" data-action="view-media" data-url="${esc(m.file_url)}" data-type="image"></div>`;
+  if (m.type === 'image') fileHTML = `<div class="msg-file"><img src="${safeUrl}" class="msg-image" data-action="view-media" data-url="${m.file_url}" data-type="image"></div>`;
   else if (m.type === 'audio') fileHTML = `<div class="msg-file"><div class="audio-player" data-src="${safeUrl}"><div class="audio-play-btn" data-action="toggle-audio"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div><div class="audio-progress-wrap" data-action="seek-audio"><div class="audio-progress-bar"><div class="audio-progress-fill" style="width:0%"></div></div></div><div class="audio-time"><span class="cur">0:00</span><span class="tot"></span></div><audio src="${safeUrl}" preload="metadata"></audio></div></div>`;
   else if (m.type === 'video') fileHTML = `<div class="msg-file"><video controls class="msg-video" src="${safeUrl}"></video></div>`;
   else if (m.type === 'file') fileHTML = `<div class="msg-file"><a href="${safeUrl}" class="msg-file-link" download>📎 ${esc(m.content)}</a></div>`;
@@ -243,7 +274,7 @@ async function renderMessageBubble(m) {
     (displayContent ? `<div class="msg-text">${esc(displayContent)}</div>` : ''));
 
   return `<div class="message-bubble ${isSent ? 'sent' : 'received'}">${text}${fileHTML}<div class="message-time">${t}</div></div>`;
-}
+};
 
 /**
  * Загружает старые сообщения (курсорная пагинация)
@@ -359,6 +390,8 @@ window.openMediaViewer = function(url, type) {
       tx = mx - (mx - tx) * ratio;
       ty = my - (my - ty) * ratio;
       scale = newScale;
+      // Центрируем при зуме 1
+      if (scale <= 1) { scale = 1; tx = 0; ty = 0; }
       img.style.transition = 'transform 0.15s ease';
       apply();
     }, { passive: false });
@@ -384,6 +417,18 @@ window.closeMediaViewer = function() {
   if (v) { v.style.display = 'none'; const b = v.querySelector('.media-viewer-body'); if (b) b.innerHTML = ''; }
   document.body.style.overflow = '';
 };
+
+// Закрытие по клику на фон вьюера
+document.addEventListener('click', e => {
+  const viewer = document.getElementById('media-viewer');
+  if (!viewer || viewer.style.display === 'none') return;
+  // Закрываем если клик НЕ по содержимому (картинка/видео/аудио) и НЕ по кнопке закрытия
+  const body = viewer.querySelector('.media-viewer-body');
+  const closeBtn = viewer.querySelector('.media-viewer-close');
+  if ((body && !body.contains(e.target)) && !(closeBtn && closeBtn.contains(e.target))) {
+    closeMediaViewer();
+  }
+});
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMediaViewer(); });
 
@@ -455,60 +500,41 @@ $('#message-form')?.addEventListener('submit', async e => {
 
 $('#message-input')?.addEventListener('keypress', e => { if (e.key === 'Enter') { e.preventDefault(); $('#message-form').requestSubmit(); } });
 
+// Статус «печатает...»
+let typingTimeout;
+$('#message-input')?.addEventListener('input', () => {
+  if (!state.chatUserId) return;
+  socket.emit('typing', { toUserId: state.chatUserId });
+  clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => {
+    socket.emit('stop_typing', { toUserId: state.chatUserId });
+  }, 2000);
+});
+
+// Приём статуса «печатает...»
+socket.on('user_typing', data => {
+  if (data.fromUserId != state.chatUserId) return;
+  const statusEl = $('#chat-status');
+  if (statusEl) {
+    statusEl.innerHTML = '<span class="online-dot" style="background:#f59e0b"></span> Печатает...';
+  }
+});
+
+socket.on('user_stop_typing', data => {
+  if (data.fromUserId != state.chatUserId) return;
+  updateChatStatus(state.chatUserId);
+});
+
 // Socket events
 socket.on('new_message', async msg => {
   if (msg.sender_id == state.chatUserId) {
-    const c = $('#chat-messages');
-
-    // E2E расшифровка
-    let displayContent = msg.content;
-    if (msg.type === 'e2e') {
-      displayContent = await tryDecryptMessage(msg.content, msg.type);
-    }
-
-    const t = new Date(msg.created_at).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
-    const safeUrl = sanitizeUrl(esc(msg.file_url));
-    let fileHTML = '';
-    if (msg.type === 'image') fileHTML = `<div class="msg-file"><img src="${safeUrl}" class="msg-image" data-action="view-media" data-url="${esc(msg.file_url)}" data-type="image"></div>`;
-    else if (msg.type === 'audio') fileHTML = `<div class="msg-file"><div class="audio-player" data-src="${safeUrl}"><div class="audio-play-btn" data-action="toggle-audio"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div><div class="audio-progress-wrap" data-action="seek-audio"><div class="audio-progress-bar"><div class="audio-progress-fill" style="width:0%"></div></div></div><div class="audio-time"><span class="cur">0:00</span><span class="tot"></span></div><audio src="${safeUrl}" preload="metadata"></audio></div></div>`;
-    else if (msg.type === 'video') fileHTML = `<div class="msg-file"><video controls class="msg-video" src="${safeUrl}"></video></div>`;
-
-    const text = msg.type === 'text' || msg.type === 'e2e' ? `<div>${esc(displayContent)}</div>` : '';
-    const div = document.createElement('div');
-    div.className = 'message-bubble received';
-    div.innerHTML = `${text}${fileHTML}<div class="message-time">${t}</div>`;
-    c.appendChild(div);
-    const player = div.querySelector('.audio-player');
-    if (player) initAudioDuration(player);
-    div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    await appendMessageBubble(msg, 'received');
   }
   loadConversations(); loadMessagesCount();
 });
 
 socket.on('message_sent', async msg => {
-  const c = $('#chat-messages');
-
-  // E2E расшифровка
-  let displayContent = msg.content;
-  if (msg.type === 'e2e') {
-    displayContent = await tryDecryptMessage(msg.content, msg.type);
-  }
-
-  const t = new Date(msg.created_at).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
-  const safeUrl = sanitizeUrl(esc(msg.file_url));
-  let fileHTML = '';
-  if (msg.type === 'image') fileHTML = `<div class="msg-file"><img src="${safeUrl}" class="msg-image" data-action="view-media" data-url="${esc(msg.file_url)}" data-type="image"></div>`;
-  else if (msg.type === 'audio') fileHTML = `<div class="msg-file"><div class="audio-player" data-src="${safeUrl}"><div class="audio-play-btn" data-action="toggle-audio"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div><div class="audio-progress-wrap" data-action="seek-audio"><div class="audio-progress-bar"><div class="audio-progress-fill" style="width:0%"></div></div></div><div class="audio-time"><span class="cur">0:00</span><span class="tot"></span></div><audio src="${safeUrl}" preload="metadata"></audio></div></div>`;
-  else if (msg.type === 'video') fileHTML = `<div class="msg-file"><video controls class="msg-video" src="${safeUrl}"></video></div>`;
-
-  const text = msg.type === 'text' || msg.type === 'e2e' ? `<div>${esc(displayContent)}</div>` : '';
-  const div = document.createElement('div');
-  div.className = 'message-bubble sent';
-  div.innerHTML = `${text}${fileHTML}<div class="message-time">${t}</div>`;
-  c.appendChild(div);
-  const player = div.querySelector('.audio-player');
-  if (player) initAudioDuration(player);
-  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  await appendMessageBubble(msg, 'sent');
   loadConversations(); loadMessagesCount();
 });
 
@@ -530,7 +556,10 @@ window.confirmDeleteChat = async function() {
     await api(`/api/messages/${state.chatUserId}`, { method: 'DELETE' });
     state.chatUserId = null;
     $('#chat-empty').style.display = 'flex'; $('#chat-active').style.display = 'none';
-    await loadConversations(); await loadMessagesCount();
+    // Мобильный: возвращаем список диалогов
+    document.querySelector('.messenger-layout')?.classList.remove('chat-open');
+    await loadConversations();
+    await loadMessagesCount();
     notify('Переписка удалена');
   } catch (e) { notify('Ошибка: ' + e.message, 'error'); }
 };

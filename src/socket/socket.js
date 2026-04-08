@@ -5,14 +5,24 @@ const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../middleware/auth');
 const { encrypt } = require('../utils/crypto');
 
+/** @type {import('socket.io').Server} */
+let ioInstance = null;
+
 /** @type {Map<number, string>} userId -> socketId */
 const connectedUsers = new Map();
+
+/** @type {Map<number, Set<number>>} userId -> Set of userIds they're typing to */
+const typingUsers = new Map();
 
 /** @type {Map<number, { count: number, resetAt: number }>} userId -> rate limit state */
 const socketRateLimits = new Map();
 
+/** @type {Map<number, { typingReset: number }>} userId -> typing rate limit */
+const typingRateLimits = new Map();
+
 const SOCKET_RATE_LIMIT = 10; // макс. сообщений
 const SOCKET_RATE_WINDOW = 60 * 1000; // 1 минута
+const TYPING_RATE_WINDOW = 3000; // мин. 3 сек между typing событиями
 
 /**
  * Проверяет rate limit для socket событий
@@ -30,6 +40,23 @@ function checkSocketRateLimit(userId) {
 
   state.count++;
   return state.count > SOCKET_RATE_LIMIT;
+}
+
+/**
+ * Проверяет rate limit для typing событий
+ * @param {number} userId
+ * @returns {boolean} — true если лимит превышен
+ */
+function checkTypingRateLimit(userId) {
+  const now = Date.now();
+  const state = typingRateLimits.get(userId);
+
+  if (!state || now > state.typingReset) {
+    typingRateLimits.set(userId, { typingReset: now + TYPING_RATE_WINDOW });
+    return false;
+  }
+
+  return true; // ещё не прошло окно
 }
 
 /**
@@ -79,6 +106,7 @@ function socketAuth(io, socket, next) {
  * @returns {Map} Map подключённых пользователей
  */
 function setupSocket(io, db) {
+  ioInstance = io;
   // Регистрация middleware для аутентификации
   io.use((socket, next) => socketAuth(io, socket, next));
 
@@ -93,9 +121,10 @@ function setupSocket(io, db) {
     socket.on('send_message', (data) => {
       const { receiverId, content, type = 'text', fileUrl = '' } = data;
       const senderId = socket.user.id;
+      const receiver = parseInt(receiverId);
 
-      if (!receiverId) return;
-      if (receiverId == senderId) return;
+      if (!receiver || isNaN(receiver)) return;
+      if (receiver == senderId) return;
       if ((!content && !fileUrl)) return;
 
       // Rate limit проверка
@@ -105,7 +134,7 @@ function setupSocket(io, db) {
       }
 
       // Проверяем что получатель существует
-      db.get('SELECT id FROM users WHERE id = ?', [receiverId], (err, user) => {
+      db.get('SELECT id FROM users WHERE id = ?', [receiver], (err, user) => {
         if (err || !user) {
           socket.emit('error', { message: 'Получатель не найден' });
           return;
@@ -113,7 +142,7 @@ function setupSocket(io, db) {
 
         db.run(
         'INSERT INTO messages (sender_id, receiver_id, content, type, file_url) VALUES (?, ?, ?, ?, ?)',
-        [senderId, receiverId, encrypt(content || ''), type, encrypt(fileUrl || '')],
+        [senderId, receiver, encrypt(content || ''), type, encrypt(fileUrl || '')],
         function (err) {
           if (err) {
             console.error('❌ Ошибка сохранения сообщения:', err.message);
@@ -122,7 +151,7 @@ function setupSocket(io, db) {
           const msg = {
             id: this.lastID,
             sender_id: senderId,
-            receiver_id: receiverId,
+            receiver_id: receiver,
             content,
             type,
             file_url: fileUrl,
@@ -130,9 +159,15 @@ function setupSocket(io, db) {
             created_at: new Date().toISOString()
           };
 
-          const receiverSocketId = connectedUsers.get(Number(receiverId));
+          const receiverSocketId = connectedUsers.get(Number(receiver));
           if (receiverSocketId) {
             io.to(receiverSocketId).emit('new_message', msg);
+            // Уведомление
+            sendNotification(Number(receiver), 'new_message', {
+              fromUserId: senderId,
+              content: content?.substring(0, 100) || '',
+              type
+            });
           }
           socket.emit('message_sent', msg);
         }
@@ -146,9 +181,45 @@ function setupSocket(io, db) {
       io.emit('user_status', { userId: Number(userId), status: 'offline' });
       console.log(`🔌 Отключён: пользователь ${userId}`);
     });
+
+    // Статус «печатает...»
+    socket.on('typing', ({ toUserId }) => {
+      const target = parseInt(toUserId);
+      if (!target || isNaN(target) || target == userId) return;
+      if (checkTypingRateLimit(Number(userId))) return; // спам-защита
+      const targetSocket = connectedUsers.get(target);
+      if (targetSocket) {
+        io.to(targetSocket).emit('user_typing', { fromUserId: Number(userId) });
+      }
+    });
+
+    socket.on('stop_typing', ({ toUserId }) => {
+      const target = parseInt(toUserId);
+      if (!target || isNaN(target) || target == userId) return;
+      if (checkTypingRateLimit(Number(userId))) return; // спам-защита
+      const targetSocket = connectedUsers.get(target);
+      if (targetSocket) {
+        io.to(targetSocket).emit('user_stop_typing', { fromUserId: Number(userId) });
+      }
+    });
   });
 
   return connectedUsers;
 }
 
-module.exports = { setupSocket, connectedUsers };
+/**
+ * Отправляет уведомление пользователю (вызывается из роутов)
+ * @param {import('socket.io').Server} io
+ * @param {number} userId — кому
+ * @param {string} type — тип уведомления
+ * @param {Object} data — данные
+ */
+function sendNotification(userId, type, data) {
+  if (!ioInstance) return;
+  const socketId = connectedUsers.get(Number(userId));
+  if (socketId) {
+    ioInstance.to(socketId).emit('notification', { type, ...data });
+  }
+}
+
+module.exports = { setupSocket, connectedUsers, typingUsers, sendNotification };

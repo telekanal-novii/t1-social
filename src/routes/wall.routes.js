@@ -14,6 +14,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../../config/database');
 const { authenticateToken } = require('../middleware/auth');
+const { upload, validateImageMagic } = require('../middleware/upload-post');
 
 /** Получить ленту всех постов (один запрос вместо N+1) */
 router.get('/api/wall/feed', authenticateToken, (req, res) => {
@@ -21,7 +22,7 @@ router.get('/api/wall/feed', authenticateToken, (req, res) => {
   const offset = parseInt(req.query.offset) || 0;
 
   db.all(
-    `SELECT wp.id, wp.user_id, wp.author_id, wp.content, wp.likes, wp.created_at,
+    `SELECT wp.id, wp.user_id, wp.author_id, wp.content, wp.image_url, wp.likes, wp.created_at,
             u.username, u.display_name, u.avatar
      FROM wall_posts wp INNER JOIN users u ON wp.author_id = u.id
      ORDER BY wp.created_at DESC LIMIT ? OFFSET ?`,
@@ -31,16 +32,18 @@ router.get('/api/wall/feed', authenticateToken, (req, res) => {
 
       // Проверяем лайки текущего пользователя и считаем комментарии
       const postIds = posts.map(p => p.id);
+      const placeholders = postIds.map(() => '?').join(',');
+
       db.all(
-        `SELECT post_id FROM post_likes WHERE post_id IN (${postIds.join(',')}) AND user_id = ?`,
-        [req.user.id], (err, liked) => {
+        `SELECT post_id FROM post_likes WHERE post_id IN (${placeholders}) AND user_id = ?`,
+        [...postIds, req.user.id], (err, liked) => {
           if (err) return res.status(500).json({ error: 'Ошибка сервера' });
           const likedSet = new Set(liked.map(l => l.post_id));
 
           // Считаем комментарии для каждого поста
           db.all(
-            `SELECT post_id, COUNT(*) as cnt FROM post_comments WHERE post_id IN (${postIds.join(',')}) GROUP BY post_id`,
-            [], (err, commentCounts) => {
+            `SELECT post_id, COUNT(*) as cnt FROM post_comments WHERE post_id IN (${placeholders}) GROUP BY post_id`,
+            [...postIds], (err, commentCounts) => {
               const countMap = {};
               if (commentCounts) commentCounts.forEach(c => { countMap[c.post_id] = c.cnt; });
 
@@ -69,7 +72,7 @@ router.get('/api/wall/:userId', authenticateToken, (req, res) => {
   const offset = parseInt(req.query.offset) || 0;
 
   db.all(
-    `SELECT wp.id, wp.user_id, wp.author_id, wp.content, wp.likes, wp.created_at,
+    `SELECT wp.id, wp.user_id, wp.author_id, wp.content, wp.image_url, wp.likes, wp.created_at,
             u.username, u.display_name, u.avatar
      FROM wall_posts wp INNER JOIN users u ON wp.author_id = u.id
      WHERE wp.user_id = ? ORDER BY wp.created_at DESC LIMIT ? OFFSET ?`,
@@ -80,16 +83,18 @@ router.get('/api/wall/:userId', authenticateToken, (req, res) => {
       const postIds = posts.map(p => p.id);
       if (postIds.length === 0) return res.json({ posts: [], hasMore: false });
 
+      const placeholders = postIds.map(() => '?').join(',');
+
       db.all(
-        `SELECT post_id FROM post_likes WHERE post_id IN (${postIds.join(',')}) AND user_id = ?`,
-        [req.user.id], (err, liked) => {
+        `SELECT post_id FROM post_likes WHERE post_id IN (${placeholders}) AND user_id = ?`,
+        [...postIds, req.user.id], (err, liked) => {
           if (err) return res.status(500).json({ error: 'Ошибка сервера' });
           const likedSet = new Set(liked.map(l => l.post_id));
 
           // Считаем комментарии
           db.all(
-            `SELECT post_id, COUNT(*) as cnt FROM post_comments WHERE post_id IN (${postIds.join(',')}) GROUP BY post_id`,
-            [], (err, commentCounts) => {
+            `SELECT post_id, COUNT(*) as cnt FROM post_comments WHERE post_id IN (${placeholders}) GROUP BY post_id`,
+            [...postIds], (err, commentCounts) => {
               const countMap = {};
               if (commentCounts) commentCounts.forEach(c => { countMap[c.post_id] = c.cnt; });
 
@@ -111,23 +116,25 @@ router.get('/api/wall/:userId', authenticateToken, (req, res) => {
 });
 
 /** Создать пост */
-router.post('/api/wall/:userId', authenticateToken, (req, res) => {
+router.post('/api/wall/:userId', authenticateToken, upload.single('image'), validateImageMagic, async (req, res) => {
   const wallOwnerId = parseInt(req.params.userId);
   if (isNaN(wallOwnerId)) return res.status(400).json({ error: 'Некорректный ID пользователя' });
 
   const { content } = req.body;
-  if (!content?.trim()) return res.status(400).json({ error: 'Содержание обязательно' });
-  if (content.length > 500) return res.status(400).json({ error: 'Максимум 500 символов' });
+  if (!content?.trim() && !req.file) return res.status(400).json({ error: 'Добавьте текст или изображение' });
+  if (content && content.length > 500) return res.status(400).json({ error: 'Максимум 500 символов' });
 
   // Проверяем что владелец стены существует
-  db.get('SELECT id FROM users WHERE id = ?', [wallOwnerId], (err, user) => {
+  db.get('SELECT id FROM users WHERE id = ?', [wallOwnerId], async (err, user) => {
     if (err) return res.status(500).json({ error: 'Ошибка сервера' });
     if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
 
-    db.run('INSERT INTO wall_posts (user_id, author_id, content) VALUES (?, ?, ?)',
-      [wallOwnerId, req.user.id, content.trim()], function (err) {
+    const imageUrl = req.file ? `/media/${req.file.filename}` : '';
+
+    db.run('INSERT INTO wall_posts (user_id, author_id, content, image_url) VALUES (?, ?, ?, ?)',
+      [wallOwnerId, req.user.id, (content || '').trim(), imageUrl], function (err) {
         if (err) return res.status(500).json({ error: 'Ошибка создания поста' });
-        res.json({ success: true, postId: this.lastID });
+        res.json({ success: true, postId: this.lastID, image_url: imageUrl });
       });
   });
 });
@@ -214,6 +221,34 @@ router.delete('/api/wall/comment/:commentId', authenticateToken, (req, res) => {
     [req.params.commentId, req.user.id], function (err) {
       if (err) return res.status(500).json({ error: 'Ошибка удаления' });
       if (this.changes === 0) return res.status(404).json({ error: 'Комментарий не найден' });
+      res.json({ success: true });
+    });
+});
+
+/** Редактировать пост (только автор) */
+router.put('/api/wall/:postId', authenticateToken, (req, res) => {
+  const { content } = req.body;
+  if (!content?.trim()) return res.status(400).json({ error: 'Содержание обязательно' });
+  if (content.length > 500) return res.status(400).json({ error: 'Максимум 500 символов' });
+
+  db.run('UPDATE wall_posts SET content = ? WHERE id = ? AND author_id = ?',
+    [content.trim(), req.params.postId, req.user.id], function (err) {
+      if (err) return res.status(500).json({ error: 'Ошибка обновления' });
+      if (this.changes === 0) return res.status(404).json({ error: 'Пост не найден или нет прав' });
+      res.json({ success: true });
+    });
+});
+
+/** Редактировать комментарий (только автор) */
+router.put('/api/wall/comment/:commentId', authenticateToken, (req, res) => {
+  const { content } = req.body;
+  if (!content?.trim()) return res.status(400).json({ error: 'Комментарий не может быть пустым' });
+  if (content.length > 300) return res.status(400).json({ error: 'Максимум 300 символов' });
+
+  db.run('UPDATE post_comments SET content = ? WHERE id = ? AND user_id = ?',
+    [content.trim(), req.params.commentId, req.user.id], function (err) {
+      if (err) return res.status(500).json({ error: 'Ошибка обновления' });
+      if (this.changes === 0) return res.status(404).json({ error: 'Комментарий не найден или нет прав' });
       res.json({ success: true });
     });
 });

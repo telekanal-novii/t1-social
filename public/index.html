@@ -3,63 +3,129 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Т1 Сеть - Вход</title>
+  <title>Т1 Сеть — Вход</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/auth.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-  <div class="auth-container">
-    <div class="auth-logo">
-      <h1>Т1 Сеть</h1>
-      <p>Локальная социальная сеть</p>
+  <div class="auth-bg">
+    <div class="auth-bg__circle auth-bg__circle--1"></div>
+    <div class="auth-bg__circle auth-bg__circle--2"></div>
+    <div class="auth-bg__circle auth-bg__circle--3"></div>
+  </div>
+
+  <div class="auth-card">
+    <!-- Левая часть — брендинг -->
+    <div class="auth-card__brand">
+      <div class="auth-card__logo">
+        <div class="auth-card__logo-icon">T1</div>
+        <h1>Сеть</h1>
+      </div>
+      <p class="auth-card__tagline">Локальная социальная сеть<br>для общения и друзей</p>
+      <ul class="auth-card__features">
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Общайтесь с друзьями
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Личные сообщения
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          Делитесь записями
+        </li>
+      </ul>
     </div>
 
-    <div class="auth-tabs">
-      <button class="auth-tab active" data-tab="login">Вход</button>
-      <button class="auth-tab" data-tab="register">Регистрация</button>
+    <!-- Правая часть — формы -->
+    <div class="auth-card__form-wrapper">
+      <!-- Переключатель -->
+      <div class="auth-toggle">
+        <button class="auth-toggle__btn active" data-tab="login">Вход</button>
+        <button class="auth-toggle__btn" data-tab="register">Регистрация</button>
+      </div>
+
+      <div class="auth-forms-wrapper">
+        <!-- Форма входа -->
+        <form id="login-form" class="auth-form active" autocomplete="off">
+        <h2>Добро пожаловать</h2>
+        <p class="auth-form__subtitle">Войдите в свой аккаунт</p>
+
+        <div class="input-group">
+          <label for="login-username">Логин</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <input type="text" id="login-username" required placeholder="Введите логин" autocomplete="username">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="login-password">Пароль</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <input type="password" id="login-password" required placeholder="Введите пароль" autocomplete="current-password">
+            <button type="button" class="toggle-password" aria-label="Показать пароль">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-submit">
+          <span>Войти</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+
+        <div id="login-error" class="error-message"></div>
+      </form>
+
+      <!-- Форма регистрации -->
+      <form id="register-form" class="auth-form" autocomplete="off">
+        <h2>Создать аккаунт</h2>
+        <p class="auth-form__subtitle">Присоединяйтесь к нам</p>
+
+        <div class="input-group">
+          <label for="register-username">Логин</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <input type="text" id="register-username" required placeholder="Придумайте логин" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="register-password">Пароль</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <input type="password" id="register-password" required placeholder="Минимум 8 символов" autocomplete="new-password">
+            <button type="button" class="toggle-password" aria-label="Показать пароль">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="register-password-confirm">Подтверждение пароля</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <input type="password" id="register-password-confirm" required placeholder="Повторите пароль" autocomplete="new-password">
+            <button type="button" class="toggle-password" aria-label="Показать пароль">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-submit">
+          <span>Зарегистрироваться</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+
+        <div id="register-error" class="error-message"></div>
+        </form>
+      </div>
     </div>
-
-    <!-- Форма входа -->
-    <form id="login-form" class="auth-form active">
-      <div class="form-group">
-        <label for="login-username">Логин</label>
-        <input type="text" id="login-username" required placeholder="Введите логин">
-      </div>
-      <div class="form-group">
-        <label for="login-password">Пароль</label>
-        <input type="password" id="login-password" required placeholder="Введите пароль">
-      </div>
-      <button type="submit" class="btn btn-primary">Войти</button>
-      <div id="login-error" class="error-message"></div>
-    </form>
-
-    <!-- Форма регистрации -->
-    <form id="register-form" class="auth-form">
-      <div class="form-group">
-        <label for="register-username">Логин</label>
-        <input type="text" id="register-username" required placeholder="Придумайте логин">
-      </div>
-      <div class="form-group">
-        <label for="register-password">Пароль</label>
-        <input type="password" id="register-password" required placeholder="Придумайте пароль (мин. 4 символа)">
-      </div>
-      <div class="form-group">
-        <label for="register-password-confirm">Подтверждение пароля</label>
-        <input type="password" id="register-password-confirm" required placeholder="Повторите пароль">
-      </div>
-      <button type="submit" class="btn btn-primary">Зарегистрироваться</button>
-      <div id="register-error" class="error-message"></div>
-    </form>
   </div>
 
   <script src="js/auth.js"></script>
-  <script>
-    // Если уже авторизован — редирект на dashboard
-    (async () => {
-      try {
-        const res = await fetch('/api/profile', { credentials: 'include' });
-        if (res.ok) window.location.href = '/dashboard.html';
-      } catch {}
-    })();
-  </script>
 </body>
 </html>

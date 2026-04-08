@@ -4,12 +4,43 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Т1 Сеть</title>
-  <link rel="stylesheet" href="css/dashboard.css?v=2">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/dashboard.css?v=3">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body>
+<body style="background:#0f172a;">
+  <!-- Splash: показывается мгновенно (inline стили, поверх контента) -->
+  <div id="app-splash" style="position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:#0f172a;transition:opacity .25s ease;">
+    <div style="text-align:center;font-family:Inter,-apple-system,sans-serif;">
+      <div style="font-size:32px;font-weight:800;margin-bottom:8px;">
+        <span style="background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Т1 Сеть</span>
+      </div>
+      <div style="font-size:14px;color:#94a3b8;">Загрузка...</div>
+    </div>
+  </div>
+
+  <!-- Мобильный оверлей -->
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <!-- Кнопка бургер-меню -->
+  <button class="burger-btn" id="burger-btn" aria-label="Открыть меню">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </button>
+
   <!-- Боковое меню -->
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
+    <!-- Кнопка закрытия для мобилки -->
+    <button class="sidebar-close" id="sidebar-close" aria-label="Закрыть меню">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+
     <div class="sidebar-header">
       <div class="logo">
         <div class="logo-icon">T1</div>
@@ -70,6 +101,12 @@
           <div class="user-name" id="sidebar-username"></div>
           <div class="user-status">Онлайн</div>
         </div>
+        <button class="settings-btn" id="settings-btn" title="Настройки">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
       </div>
       <button id="logout-btn" class="btn-logout">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -85,7 +122,7 @@
   <!-- Основной контент -->
   <main class="main-content">
     <!-- Главная - Лента постов -->
-    <section id="feed-page" class="page active">
+    <section id="feed-page" class="page">
       <div class="page-header">
         <div>
           <h1>Лента</h1>
@@ -99,18 +136,30 @@
         </div>
         <div class="post-form-content">
           <textarea id="feed-post-content" rows="2" placeholder="Что у вас нового?"></textarea>
+          <div id="feed-post-image-preview" class="post-image-preview" style="display:none;">
+            <img id="feed-post-image" src="" alt="">
+            <button type="button" class="post-image-remove" data-target="feed">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
           <div class="post-form-actions">
             <span class="char-count" id="feed-char-count">0/500</span>
-            <button id="feed-publish-btn" class="btn-publish">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="22" y1="2" x2="11" y2="13"></line>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-              </svg>
-              <span>Опубликовать</span>
-            </button>
+            <div class="post-form-buttons">
+              <button type="button" class="btn-attach-post" data-target="feed" title="Прикрепить изображение">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              </button>
+              <button id="feed-publish-btn" class="btn-publish">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+                <span>Опубликовать</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
+      <input type="file" id="feed-post-file" style="display:none" accept="image/*,image/gif">
       <div id="feed-posts" class="wall-posts"></div>
     </section>
 
@@ -169,18 +218,30 @@
           </div>
           <div class="post-form-content">
             <textarea id="post-content" rows="2" placeholder="Что у вас нового?"></textarea>
+            <div id="post-image-preview" class="post-image-preview" style="display:none;">
+              <img id="post-image" src="" alt="">
+              <button type="button" class="post-image-remove" data-target="post">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
             <div class="post-form-actions">
               <span class="char-count" id="char-count">0/500</span>
-              <button id="publish-post-btn" class="btn-publish">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="22" y1="2" x2="11" y2="13"></line>
-                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                </svg>
-                <span>Опубликовать</span>
-              </button>
+              <div class="post-form-buttons">
+                <button type="button" class="btn-attach-post" data-target="post" title="Прикрепить изображение">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                </button>
+                <button id="publish-post-btn" class="btn-publish">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                  </svg>
+                  <span>Опубликовать</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
+        <input type="file" id="post-file" style="display:none" accept="image/*,image/gif">
         <div id="wall-posts" class="wall-posts"></div>
       </div>
     </section>
@@ -242,18 +303,30 @@
           </div>
           <div class="post-form-content">
             <textarea id="other-post-content" rows="2" placeholder="Написать на стене..."></textarea>
+            <div id="other-post-image-preview" class="post-image-preview" style="display:none;">
+              <img id="other-post-image" src="" alt="">
+              <button type="button" class="post-image-remove" data-target="other">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
             <div class="post-form-actions">
               <span class="char-count" id="other-char-count">0/500</span>
-              <button id="other-publish-post-btn" class="btn-publish">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="22" y1="2" x2="11" y2="13"></line>
-                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                </svg>
-                <span>Опубликовать</span>
-              </button>
+              <div class="post-form-buttons">
+                <button type="button" class="btn-attach-post" data-target="other" title="Прикрепить изображение">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                </button>
+                <button id="other-publish-post-btn" class="btn-publish">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                  </svg>
+                  <span>Опубликовать</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
+        <input type="file" id="other-post-file" style="display:none" accept="image/*,image/gif">
         <div id="other-wall-posts" class="wall-posts"></div>
       </div>
     </section>
@@ -313,7 +386,7 @@
     <section id="messages-page" class="page">
       <div class="messenger-layout">
         <!-- Список диалогов -->
-        <div class="conversations-panel-modern">
+        <div class="conversations-panel-modern" id="conversations-panel">
           <div class="panel-header">
             <div class="panel-header-row">
               <h2>Диалоги</h2>
@@ -331,7 +404,14 @@
         </div>
 
         <!-- Чат -->
-        <div class="chat-panel-modern">
+        <div class="chat-panel-modern" id="chat-panel">
+          <!-- Кнопка назад (только мобильная) -->
+          <button class="chat-back-btn" id="chat-back-btn" aria-label="Назад к диалогам">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+
           <div id="chat-empty" class="chat-empty-state">
             <div class="chat-empty-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -350,7 +430,7 @@
               </div>
               <div class="chat-user-details">
                 <h4 id="chat-username"></h4>
-                <span class="online-indicator">
+                <span class="online-indicator" id="chat-status">
                   <span class="online-dot"></span>
                   Онлайн
                 </span>
@@ -376,6 +456,99 @@
       </div>
     </section>
   </main>
+
+  <!-- Модалка настроек -->
+  <div id="settings-modal" class="settings-modal-overlay" style="display: none;">
+    <div class="settings-modal-box">
+      <div class="settings-modal-header">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          Настройки
+        </h3>
+        <button id="settings-close-btn" class="settings-close-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <div class="settings-tabs">
+        <button class="settings-tab active" data-tab="theme">Тема</button>
+        <button class="settings-tab" data-tab="password">Пароль</button>
+        <button class="settings-tab" data-tab="danger">Удалить аккаунт</button>
+      </div>
+
+      <!-- Выбор темы -->
+      <div class="settings-pane active" id="settings-theme">
+        <div class="theme-grid" id="theme-grid">
+          <button class="theme-option active" data-theme="default">
+            <div class="theme-preview" style="background: linear-gradient(135deg, #6366f1, #7c3aed);">
+              <div class="theme-preview-dot" style="background: #6366f1;"></div>
+              <div class="theme-preview-dot" style="background: #818cf8;"></div>
+            </div>
+            <span>По умолчанию</span>
+          </button>
+          <button class="theme-option" data-theme="neon">
+            <div class="theme-preview" style="background: linear-gradient(135deg, #e91e8c, #2dd4b8);">
+              <div class="theme-preview-dot" style="background: #e91e8c;"></div>
+              <div class="theme-preview-dot" style="background: #2dd4b8;"></div>
+            </div>
+            <span>Неон</span>
+          </button>
+          <button class="theme-option" data-theme="cyber">
+            <div class="theme-preview" style="background: linear-gradient(135deg, #00ff88, #00aaff);">
+              <div class="theme-preview-dot" style="background: #00ff88;"></div>
+              <div class="theme-preview-dot" style="background: #00aaff;"></div>
+            </div>
+            <span>Кибер</span>
+          </button>
+          <button class="theme-option" data-theme="sunset">
+            <div class="theme-preview" style="background: linear-gradient(135deg, #ff6b35, #ff2d7b);">
+              <div class="theme-preview-dot" style="background: #ff6b35;"></div>
+              <div class="theme-preview-dot" style="background: #ff2d7b;"></div>
+            </div>
+            <span>Закат</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Смена пароля -->
+      <div class="settings-pane" id="settings-password">
+        <form id="password-form" class="settings-form">
+          <div class="settings-field">
+            <label for="current-password">Текущий пароль</label>
+            <input type="password" id="current-password" required placeholder="Введите текущий пароль" autocomplete="current-password">
+          </div>
+          <div class="settings-field">
+            <label for="new-password">Новый пароль</label>
+            <input type="password" id="new-password" required placeholder="Минимум 8 символов" autocomplete="new-password">
+          </div>
+          <div class="settings-field">
+            <label for="confirm-password">Подтверждение</label>
+            <input type="password" id="confirm-password" required placeholder="Повторите новый пароль" autocomplete="new-password">
+          </div>
+          <div id="password-error" class="settings-error" style="display:none;"></div>
+          <button type="submit" class="settings-save-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            Сохранить
+          </button>
+        </form>
+      </div>
+
+      <!-- Удаление аккаунта -->
+      <div class="settings-pane" id="settings-danger">
+        <div class="settings-danger-card">
+          <div class="settings-danger-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+          <div class="settings-danger-content">
+            <h4>Удалить аккаунт</h4>
+            <p>Это действие необратимо. Все ваши данные, посты и сообщения будут удалены навсегда.</p>
+          </div>
+        </div>
+        <div id="delete-account-error" class="settings-error" style="display:none;"></div>
+        <button id="delete-account-btn" class="settings-danger-btn">Удалить аккаунт</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Модалка для смены аватара -->
   <div id="avatar-modal" class="avatar-modal-overlay" style="display: none;">
@@ -405,15 +578,17 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="js/modules/utils.js"></script>
-  <script src="js/modules/e2e.js"></script>
-  <script src="js/modules/api.js"></script>
-  <script src="js/modules/profile.js"></script>
-  <script src="js/modules/friends.js"></script>
-  <script src="js/modules/messages.js"></script>
-  <script src="js/modules/userProfile.js"></script>
-  <script src="js/modules/navigation.js"></script>
-  <script src="js/modules/handlers.js"></script>
-  <script src="js/dashboard.js"></script>
+  <script src="js/burger.js?v=3"></script>
+  <script src="js/modules/utils.js?v=3"></script>
+  <script src="js/modules/time.js?v=3"></script>
+  <script src="js/modules/e2e.js?v=3"></script>
+  <script src="js/modules/api.js?v=3"></script>
+  <script src="js/modules/profile.js?v=3"></script>
+  <script src="js/modules/friends.js?v=3"></script>
+  <script src="js/modules/messages.js?v=3"></script>
+  <script src="js/modules/userProfile.js?v=3"></script>
+  <script src="js/modules/navigation.js?v=3"></script>
+  <script src="js/modules/handlers.js?v=3"></script>
+  <script src="js/dashboard.js?v=3"></script>
 </body>
 </html>

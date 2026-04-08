@@ -50,17 +50,22 @@ router.post('/api/register', async (req, res) => {
 
     const hashed = await bcrypt.hash(password, 10);
 
-    db.run('INSERT INTO users (username, password) VALUES (?, ?)', [username.trim(), hashed], function (err) {
-      if (err) {
-        return err.message.includes('UNIQUE')
-          ? res.status(400).json({ error: 'Логин уже занят' })
-          : res.status(500).json({ error: 'Ошибка регистрации' });
-      }
+    db.run(
+      'INSERT INTO users (username, password) VALUES (?, ?)',
+      [username.trim(), hashed],
+      function (err) {
+        if (err) {
+          return err.message.includes('UNIQUE')
+            ? res.status(400).json({ error: 'Логин уже занят' })
+            : res.status(500).json({ error: 'Ошибка регистрации' });
+        }
 
-      const token = jwt.sign({ id: this.lastID, username }, JWT_SECRET, { expiresIn: '7d' });
-      setTokenCookie(res, token);
-      res.status(201).json({ userId: this.lastID, username });
-    });
+        const userId = this.lastID;
+        const token = jwt.sign({ id: userId, username }, JWT_SECRET, { expiresIn: '7d' });
+        setTokenCookie(res, token);
+        res.status(201).json({ userId, username });
+      }
+    );
   } catch {
     res.status(500).json({ error: 'Ошибка сервера' });
   }

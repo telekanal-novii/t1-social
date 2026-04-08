@@ -44,18 +44,40 @@
     // Инициализация навигации и роутинга
     if (typeof initNavigation === 'function') initNavigation();
 
-    // Загружаем данные
-    loadProfile();
-    loadFriendRequestsCount();
-    loadMessagesCount();
+    // Обновляем user-card в сайдбаре на ЛЮБОЙ странице
+    if (typeof updateUserCard === 'function') updateUserCard();
+
+    // Splash: держим до полной загрузки всех ресурсов
+    const splash = document.getElementById('app-splash');
+    if (splash) {
+      const hide = () => {
+        splash.style.opacity = '0';
+        splash.style.pointerEvents = 'none';
+        setTimeout(() => splash.remove(), 250);
+      };
+      if (document.readyState === 'complete') {
+        hide();
+      } else {
+        window.addEventListener('load', hide, { once: true });
+        setTimeout(hide, 5000);
+      }
+    }
+
+    // Фоновое обновление данных (только активной страницы)
+    setInterval(() => {
+      if (typeof currentPage === 'undefined') return;
+      if (currentPage === 'feed') loadAllUsers();
+      if (currentPage === 'friends') { loadFriendRequests(); loadFriends(); }
+    }, 30000);
 
     setInterval(loadFriendRequestsCount, 10000);
     setInterval(loadMessagesCount, 10000);
     setInterval(() => {
-      if ($('#messages-page')?.classList.contains('active') && !state.chatUserId) loadConversations();
+      if (typeof currentPage !== 'undefined' && currentPage === 'messages' && typeof state !== 'undefined' && !state.chatUserId) loadConversations();
     }, 15000);
   } catch {
     // Не авторизован — редирект
+    document.body.style.display = '';
     window.location.href = '/';
   }
 })();
