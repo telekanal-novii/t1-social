@@ -255,19 +255,21 @@ $('#avatar-file')?.addEventListener('change', e => {
     r.readAsDataURL(e.target.files[0]);
   }
 });
-$('#avatar-form')?.addEventListener('submit', async e => {
-  e.preventDefault();
+$('#avatar-submit-btn')?.addEventListener('click', async () => {
   if (!selectedAvatarFile) return notify('Выберите файл', 'error');
   const fd = new FormData(); fd.append('avatar', selectedAvatarFile);
   try {
     await api('/api/profile/avatar', { method: 'PUT', body: fd });
     $('#avatar-modal').style.display = 'none';
     loadProfile(); notify('Аватар обновлен!');
-    $('#avatar-file').value = ''; $('#avatar-preview-container').style.display = 'none'; 
-    $('#avatar-preview').style.display = 'none'; 
+    $('#avatar-file').value = ''; $('#avatar-preview-container').style.display = 'none';
+    $('#avatar-preview').style.display = 'none';
     selectedAvatarFile = null;
     $('#avatar-submit-btn').disabled = true;
-  } catch { notify('Ошибка', 'error'); }
+  } catch (e) {
+    console.error('[avatar] Ошибка загрузки:', e);
+    notify(e.message || 'Ошибка загрузки аватара', 'error');
+  }
 });
 
 // ======================== СТЕНА ========================

@@ -69,6 +69,7 @@ app.use(helmet({
       mediaSrc: ["'self'"],
       connectSrc: ["'self'"],
       frameSrc: ["'none'"],
+      frameAncestors: ["'self'", "https://huggingface.co", "https://*.hf.space"],
       objectSrc: ["'none'"],
       upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
     }
@@ -76,8 +77,23 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
+const ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'https://huggingface.co',
+  'https://f0r3d8-t1-social.hf.space',
+  'https://f0r3d8.space'
+];
+
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' ? false : 'http://localhost:3000',
+  origin: (origin, callback) => {
+    // Разрешаем запросы без Origin (мобильные приложения, curl)
+    if (!origin) return callback(null, true);
+    // Разрешаем любой hf.space поддомен
+    if (origin.endsWith('.hf.space') || origin.includes('huggingface.co')) return callback(null, true);
+    // Разрешаем localhost для разработки
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error('Недопустимый origin'));
+  },
   credentials: true
 }));
 app.use(cookieParser());

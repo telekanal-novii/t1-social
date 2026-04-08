@@ -7,6 +7,9 @@ RUN npm install --production
 
 COPY . .
 
+# Создаём директории для загруженных файлов
+RUN mkdir -p public/avatars public/media
+
 ENV PORT=7860
 
 EXPOSE 7860
