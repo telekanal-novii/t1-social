@@ -20,9 +20,13 @@ function initializeDatabase() {
       bio TEXT DEFAULT '',
       e2e_public_key TEXT DEFAULT '',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`, function() {
-      // Миграция: добавляем e2e_public_key если колонки нет
-      db.run(`ALTER TABLE users ADD COLUMN e2e_public_key TEXT DEFAULT ''`);
+    )`);
+
+    // Миграция: добавляем e2e_public_key если колонки нет
+    db.run(`ALTER TABLE users ADD COLUMN e2e_public_key TEXT DEFAULT ''`, (err) => {
+      if (err && !err.message.includes('duplicate')) {
+        console.error('Migration error:', err);
+      }
     });
 
     db.run(`CREATE TABLE IF NOT EXISTS friendships (
