@@ -11,6 +11,9 @@ const fs = require('fs');
 const multer = require('multer');
 const crypto = require('crypto');
 const ffmpeg = require('fluent-ffmpeg');
+
+// Явно указываем путь к ffmpeg для корректной работы на HF Spaces
+ffmpeg.setFfmpegPath('ffmpeg');
 const db = require('../../config/database');
 const { authenticateToken } = require('../middleware/auth');
 
@@ -61,12 +64,19 @@ router.get('/api/music/user/:userId', authenticateToken, (req, res) => {
 
 /** Загрузить трек (с конвертацией в MP3 128kbps) */
 router.post('/api/music/upload', authenticateToken, upload.single('audio'), (req, res) => {
+  console.log('[music] Upload request received');
+  console.log('[music] File:', req.file ? req.file.originalname : 'none');
+  console.log('[music] Body:', req.body);
+
   if (!req.file) return res.status(400).json({ error: 'Файл не загружен' });
 
   const { title, artist, duration } = req.body || {};
   const originalPath = req.file.path;
   // Всегда конвертируем в MP3 для экономии места и унификации
   const finalPath = originalPath.replace(/\.[^.]+$/, '.mp3');
+
+  console.log('[music] Original path:', originalPath);
+  console.log('[music] Final path:', finalPath);
 
   const finalize = (error) => {
     if (error) {
