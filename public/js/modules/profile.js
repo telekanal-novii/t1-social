@@ -300,16 +300,21 @@ $('#avatar-submit-btn')?.addEventListener('click', async () => {
       if (profileImg) { profileImg.src = newAvatar; profileImg.style.display = 'block'; }
       const profilePH = $('#profile-avatar-placeholder');
       if (profilePH) profilePH.style.display = 'none';
-      // Wall post form
+      // Wall post form (своя стена)
       const postFormImg = $('#post-form-avatar');
       if (postFormImg) { postFormImg.src = newAvatar; postFormImg.style.display = 'block'; }
       const postFormPH = $('#post-form-avatar-placeholder');
       if (postFormPH) postFormPH.style.display = 'none';
-      // Feed post form
+      // Feed post form (лента)
       const feedImg = $('#feed-post-avatar');
       if (feedImg) { feedImg.src = newAvatar; feedImg.style.display = 'block'; }
       const feedPH = $('#feed-post-avatar-placeholder');
       if (feedPH) feedPH.style.display = 'none';
+      // Обновляем аватарку на форме ленты если она есть
+      const feedPostAvatar = document.querySelector('#feed-page .post-form-avatar img');
+      if (feedPostAvatar) feedPostAvatar.src = newAvatar;
+      const feedPostPH = document.querySelector('#feed-page .post-form-avatar-placeholder');
+      if (feedPostPH) feedPostPH.style.display = 'none';
     }
     notify('Аватар обновлен!');
     $('#avatar-file').value = ''; $('#avatar-preview-container').style.display = 'none';

@@ -260,30 +260,33 @@ window.renderMessageBubble = async function(m) {
   }
 
   let fileHTML = '';
-  if (m.type === 'image') {
-    // Извлекаем оригинальное имя файла из content или URL
+  if (m.type === 'image' || m.file_url) {
+    const isImage = m.type === 'image';
+    // Извлекаем оригинальное имя файла из file_name, content или URL
     let fileName = '';
-    if (m.content && m.content.length < 100) fileName = m.content;
+    if (m.file_name) fileName = m.file_name;
+    else if (m.content && !E2E.isEncrypted(m.content) && m.content.length < 100) fileName = m.content;
     else if (m.file_url) fileName = m.file_url.split('/').pop().replace(/^[a-f0-9-]+\./, '');
-    fileHTML = `<div class="msg-file"><img src="${safeUrl}" class="msg-image" data-action="view-media" data-url="${m.file_url}" data-type="image">${fileName ? `<div class="msg-file-name">${esc(fileName)}</div>` : ''}</div>`;
-  }
-  else if (m.type === 'audio') {
-    // Показываем оригинальное имя файла для аудио
-    let audioName = '';
-    if (m.content && m.content.length < 200 && !E2E.isEncrypted(m.content)) audioName = m.content;
-    else if (m.file_url) audioName = m.file_url.split('/').pop().replace(/^[a-f0-9-]+-/, '').replace(/\.[^.]+$/, '');
-    fileHTML = `<div class="msg-file"><div class="audio-player" data-src="${safeUrl}" data-name="${esc(audioName)}"><div class="audio-play-btn" data-action="toggle-audio"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div><div class="audio-info"><div class="audio-name">${esc(audioName)}</div><div class="audio-controls"><div class="audio-progress-wrap" data-action="seek-audio"><div class="audio-progress-bar"><div class="audio-progress-fill" style="width:0%"></div></div></div><div class="audio-time"><span class="cur">0:00</span><span class="tot"></span></div></div></div><audio src="${safeUrl}" preload="metadata"></audio></div></div>`;
-  }
-  else if (m.type === 'video') fileHTML = `<div class="msg-file"><video controls class="msg-video" src="${safeUrl}"></video></div>`;
-  else if (m.type === 'file') {
-    const fileName = m.content && m.content.length < 200 ? m.content : (m.file_url ? m.file_url.split('/').pop() : 'Файл');
-    fileHTML = `<div class="msg-file"><a href="${safeUrl}" class="msg-file-link" download>📎 ${esc(fileName)}</a></div>`;
+
+    if (isImage) {
+      fileHTML = `<div class="msg-file"><img src="${safeUrl}" class="msg-image" data-action="view-media" data-url="${m.file_url}" data-type="image">${fileName ? `<div class="msg-file-name">${esc(fileName)}</div>` : ''}</div>`;
+    } else if (m.type === 'audio') {
+      let audioName = fileName;
+      if (!audioName && m.file_url) audioName = m.file_url.split('/').pop().replace(/^[a-f0-9-]+-/, '').replace(/\.[^.]+$/, '');
+      fileHTML = `<div class="msg-file"><div class="audio-player" data-src="${safeUrl}" data-name="${esc(audioName)}"><div class="audio-play-btn" data-action="toggle-audio"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div><div class="audio-info"><div class="audio-name">${esc(audioName)}</div><div class="audio-controls"><div class="audio-progress-wrap" data-action="seek-audio"><div class="audio-progress-bar"><div class="audio-progress-fill" style="width:0%"></div></div></div><div class="audio-time"><span class="cur">0:00</span><span class="tot"></span></div></div></div><audio src="${safeUrl}" preload="metadata"></audio></div></div>`;
+    } else if (m.type === 'video') {
+      fileHTML = `<div class="msg-file"><video controls class="msg-video" src="${safeUrl}"></video></div>`;
+    } else if (m.type === 'file') {
+      const displayName = fileName || 'Файл';
+      fileHTML = `<div class="msg-file"><a href="${safeUrl}" class="msg-file-link" download>📎 ${esc(displayName)}</a></div>`;
+    }
   }
 
-  const text = m.type === 'text' ? `<div>${esc(displayContent)}</div>` :
-    (m.type === 'e2e' ? `<div>${esc(displayContent)}</div>` : '');
+  // Текст показываем даже если есть файл (комбинированное сообщение)
+  const hasText = m.type === 'text' || (m.type === 'e2e' && displayContent && !E2E.isEncrypted(displayContent));
+  const text = hasText ? `<span class="msg-content">${esc(displayContent)}</span>` : '';
 
-  return `<div class="message-bubble ${isSent ? 'sent' : 'received'}">${text}${fileHTML}<div class="message-time">${t}</div></div>`;
+  return `<div class="message-bubble ${isSent ? 'sent' : 'received'}">${text}${fileHTML}<span class="message-time">${t}</span></div>`;
 };
 
 /**
@@ -534,23 +537,23 @@ $('#message-form')?.addEventListener('submit', async e => {
   if (!state.chatUserId) return;
 
   if (pendingMessageFile) {
-    // Отправляем файл + текст вместе
+    // Отправляем файл + текст вместе как одно сообщение
     const fd = new FormData();
     fd.append('file', pendingMessageFile);
     try {
       const up = await api('/api/messages/upload', { method: 'POST', body: fd });
-      // Если есть текст, шифруем и добавляем к файлу
-      let msgContent = up.fileName;
+      // Шифруем текст если есть
+      let encryptedContent = '';
       if (content) {
-        const encrypted = await encryptMessageForUser(content, state.chatUserId);
-        msgContent = encrypted.content;
+        const enc = await encryptMessageForUser(content, state.chatUserId);
+        encryptedContent = enc.content;
       }
-      const msgType = content ? (up.type === 'e2e' ? 'e2e' : up.type) : up.type;
       socket.emit('send_message', {
         receiverId: state.chatUserId,
-        content: msgContent,
-        type: up.type,
-        fileUrl: up.fileUrl
+        content: content ? encryptedContent : up.fileName,
+        type: content ? (encryptedContent ? 'e2e' : 'text') : up.type,
+        fileUrl: up.fileUrl,
+        fileName: up.fileName
       });
     } catch (e) { notify('Ошибка загрузки: ' + e.message, 'error'); return; }
     pendingMessageFile = null;

@@ -119,7 +119,7 @@ function setupSocket(io, db) {
     io.emit('user_status', { userId: Number(userId), status: 'online' });
 
     socket.on('send_message', (data) => {
-      const { receiverId, content, type = 'text', fileUrl = '' } = data;
+      const { receiverId, content, type = 'text', fileUrl = '', fileName = '' } = data;
       const senderId = socket.user.id;
       const receiver = parseInt(receiverId);
 
@@ -155,6 +155,7 @@ function setupSocket(io, db) {
             content,
             type,
             file_url: fileUrl,
+            file_name: fileName,
             is_read: 0,
             created_at: new Date().toISOString()
           };
@@ -167,7 +168,7 @@ function setupSocket(io, db) {
               sendNotification(Number(receiver), 'new_message', {
                 fromUserId: senderId,
                 fromUsername: sender ? (sender.display_name || sender.username) : '',
-                content: content?.substring(0, 100) || '',
+                content: content?.substring(0, 100) || (fileName ? '📎 ' + fileName : 'Файл'),
                 type
               });
             });

@@ -46,6 +46,16 @@ document.addEventListener('click', async e => {
     return;
   }
 
+  // ======================== ПРОСМОТР АВАТАРКИ ========================
+  const avatarImg = e.target.closest('.avatar-img-clickable') || e.target.closest('.wall-post-avatar img') || e.target.closest('.conversation-avatar-wrapper img') || e.target.closest('.user-avatar-small img');
+  if (avatarImg && avatarImg.src && !avatarImg.src.includes('placeholder')) {
+    e.preventDefault(); e.stopPropagation();
+    if (typeof window.openMediaViewer === 'function') {
+      window.openMediaViewer(avatarImg.src, 'image');
+    }
+    return;
+  }
+
   // ======================== ЛАЙК ========================
   const likeBtn = e.target.closest('.like-post');
   if (likeBtn) {

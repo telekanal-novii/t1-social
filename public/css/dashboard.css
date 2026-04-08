@@ -606,7 +606,9 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-pri
 .message-bubble { max-width: 70%; padding: 12px 16px; border-radius: 18px; font-size: 15px; line-height: 1.5; }
 .message-bubble.sent { background: var(--primary); color: white; align-self: flex-end; border-bottom-right-radius: 6px; }
 .message-bubble.received { background: var(--bg-tertiary); align-self: flex-start; border-bottom-left-radius: 6px; }
-.message-time { font-size: 11px; opacity: .7; margin-top: 6px; text-align: right; }
+.msg-content { display: inline; }
+.message-time { font-size: 11px; opacity: .7; margin-top: 4px; display: inline-block; float: right; margin-left: 8px; position: relative; top: 2px; }
+.message-bubble.sent .message-time { color: rgba(255,255,255,.7); }
 
 .message-input-modern { padding: 20px; border-top: 1px solid var(--border); display: flex; gap: 12px; flex-shrink: 0; background: var(--bg-secondary); flex-direction: column; }
 .message-input-row { display: flex; gap: 12px; align-items: center; }
