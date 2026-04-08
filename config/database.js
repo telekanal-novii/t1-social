@@ -8,6 +8,11 @@ const db = new sqlite3.Database(DB_PATH, (err) => {
   else console.log('Подключено к SQLite базе данных');
 });
 
+// Включаем WAL mode для корректной конкурентной работы нескольких пользователей
+db.run('PRAGMA journal_mode = WAL');
+// Усиливаем безопасность
+db.run('PRAGMA foreign_keys = ON');
+
 function initializeDatabase() {
   db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS users (

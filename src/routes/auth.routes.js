@@ -7,6 +7,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const router = express.Router();
 const db = require('../../config/database');
 const { JWT_SECRET } = require('../middleware/auth');
@@ -15,12 +16,14 @@ const { JWT_SECRET } = require('../middleware/auth');
  * Устанавливает httpOnly cookie с токеном
  */
 function setTokenCookie(res, token) {
+  const isProd = process.env.NODE_ENV === 'production';
   res.cookie('token', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProd,
+    sameSite: 'strict',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 дней
-    path: '/'
+    path: '/',
+    ...(isProd ? { domain: process.env.COOKIE_DOMAIN || undefined } : {})
   });
 }
 
@@ -61,7 +64,12 @@ router.post('/api/register', async (req, res) => {
         }
 
         const userId = this.lastID;
-        const token = jwt.sign({ id: userId, username }, JWT_SECRET, { expiresIn: '7d' });
+        const token = jwt.sign({
+          id: userId,
+          username,
+          jti: crypto.randomUUID(),
+          iat: Date.now()
+        }, JWT_SECRET, { expiresIn: '7d' });
         setTokenCookie(res, token);
         res.status(201).json({ userId, username });
       }
@@ -91,7 +99,12 @@ router.post('/api/login', (req, res) => {
       const isValid = await bcrypt.compare(password, user.password);
       if (!isValid) return res.status(401).json({ error: 'Неверный логин или пароль' });
 
-      const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
+      const token = jwt.sign({
+        id: user.id,
+        username: user.username,
+        jti: crypto.randomUUID(),
+        iat: Date.now()
+      }, JWT_SECRET, { expiresIn: '7d' });
       setTokenCookie(res, token);
       res.json({ userId: user.id, username: user.username });
     } catch {
