@@ -168,6 +168,32 @@ document.addEventListener('click', async e => {
     return;
   }
 
+  // ======================== КОММЕНТАРИЙ НА ENTER ========================
+  // (добавляется через delegation на document)
+});
+
+// Enter для отправки комментария
+document.addEventListener('keydown', async e => {
+  if (e.target.classList.contains('comment-input') && e.key === 'Enter') {
+    e.preventDefault();
+    const input = e.target;
+    const postId = input.dataset.postId;
+    if (!input.value.trim() || !postId) return;
+    const card = input.closest('.wall-post-card');
+    try {
+      await api(`/api/wall/post/${postId}/comments`, { method: 'POST', body: JSON.stringify({ content: input.value.trim() }) });
+      input.value = '';
+      if (typeof loadComments === 'function') await loadComments(Number(postId), card);
+      else if (typeof loadCommentsPreview === 'function') await loadCommentsPreview(card);
+    } catch (err) {
+      console.error('[handlers] Ошибка отправки комментария:', err);
+      notify('Ошибка отправки комментария', 'error');
+    }
+  }
+});
+
+// Продолжение click обработчика
+document.addEventListener('click', async e => {
   // ======================== УДАЛИТЬ КОММЕНТАРИЙ ========================
   const dc = e.target.closest('.delete-comment');
   if (dc) {

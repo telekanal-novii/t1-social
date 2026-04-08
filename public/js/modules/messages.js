@@ -141,15 +141,19 @@ window.openChat = async function(fId, fName, fAvatar, fUsername = '') {
   $('#messages-page')?.classList.add('active');
   history.pushState({ page: 'messages' }, '', '/messages');
 
-  resetChatView();
+  // НЕ сбрасываем chat-open — он нужен для мобильного перехода
+  // resetChatView() вызывается только при загрузке страницы
 
   // Показываем чат
   $('#chat-empty').style.display = 'none';
   $('#chat-active').style.display = 'flex';
 
   // Мобильный: переключаем на экран чата
-  if (window.innerWidth <= 768) {
+  const isMobile = window.innerWidth <= 768;
+  if (isMobile) {
     document.querySelector('.messenger-layout')?.classList.add('chat-open');
+  } else {
+    document.querySelector('.messenger-layout')?.classList.remove('chat-open');
   }
 
   const el = $('#chat-username');
