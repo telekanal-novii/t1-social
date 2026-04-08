@@ -260,12 +260,14 @@ window.renderMessageBubble = async function(m) {
   }
 
   let fileHTML = '';
-  if (m.type === 'image') fileHTML = `<div class="msg-file"><img src="${safeUrl}" class="msg-image" data-action="view-media" data-url="${m.file_url}" data-type="image"></div>`;
+  if (m.type === 'image') {
+    const fileName = m.file_url ? m.file_url.split('/').pop() : '';
+    fileHTML = `<div class="msg-file"><img src="${safeUrl}" class="msg-image" data-action="view-media" data-url="${m.file_url}" data-type="image">${fileName ? `<div class="msg-file-name">${esc(fileName)}</div>` : ''}</div>`;
+  }
   else if (m.type === 'audio') fileHTML = `<div class="msg-file"><div class="audio-player" data-src="${safeUrl}"><div class="audio-play-btn" data-action="toggle-audio"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div><div class="audio-progress-wrap" data-action="seek-audio"><div class="audio-progress-bar"><div class="audio-progress-fill" style="width:0%"></div></div></div><div class="audio-time"><span class="cur">0:00</span><span class="tot"></span></div><audio src="${safeUrl}" preload="metadata"></audio></div></div>`;
   else if (m.type === 'video') fileHTML = `<div class="msg-file"><video controls class="msg-video" src="${safeUrl}"></video></div>`;
   else if (m.type === 'file') {
-    // Извлекаем имя файла из URL или используем content
-    const fileName = m.file_url ? m.file_url.split('/').pop() : (m.content ? 'Файл' : 'Файл');
+    const fileName = m.file_url ? m.file_url.split('/').pop() : 'Файл';
     fileHTML = `<div class="msg-file"><a href="${safeUrl}" class="msg-file-link" download>📎 ${esc(fileName)}</a></div>`;
   }
 
@@ -486,7 +488,7 @@ $('#message-file-input')?.addEventListener('change', e => {
   if (file && state.chatUserId) { sendMessageFile(file, state.chatUserId); e.target.value = ''; }
 });
 
-// Send message
+// Send message — Enter отправляет, Ctrl+Enter переносит строку
 $('#message-form')?.addEventListener('submit', async e => {
   e.preventDefault();
   const input = $('#message-input'), content = input.value.trim();
@@ -496,9 +498,17 @@ $('#message-form')?.addEventListener('submit', async e => {
   const encrypted = await encryptMessageForUser(content, state.chatUserId);
   socket.emit('send_message', { receiverId: state.chatUserId, content: encrypted.content, type: encrypted.type });
   input.value = '';
+  // Сброс высоты textarea
+  input.style.height = 'auto';
 });
 
-$('#message-input')?.addEventListener('keypress', e => { if (e.key === 'Enter') { e.preventDefault(); $('#message-form').requestSubmit(); } });
+$('#message-input')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    $('#message-form').requestSubmit();
+  }
+  // Ctrl+Enter — перенос строки (ничего не делаем, стандартное поведение textarea)
+});
 
 // Статус «печатает...»
 let typingTimeout;
@@ -538,6 +548,18 @@ socket.on('message_sent', async msg => {
   loadConversations(); loadMessagesCount();
 });
 
+// Если собеседник удалил переписку
+socket.on('chat_deleted', async data => {
+  if (state.chatUserId === data.userId) {
+    state.chatUserId = null;
+    $('#chat-active').style.display = 'none';
+    $('#chat-empty').style.display = 'flex';
+    document.querySelector('.messenger-layout')?.classList.remove('chat-open');
+    notify('Собеседник удалил переписку', 'info');
+  }
+  await loadConversations();
+});
+
 async function loadMessagesCount() {
   try {
     const convs = await api('/api/conversations');
@@ -553,13 +575,15 @@ window.confirmDeleteChat = async function() {
   if (!state.chatUserId) return notify('Откройте диалог', 'error');
   if (!confirm('Удалить всю переписку? Это действие нельзя отменить.')) return;
   try {
+    const deletedUserId = state.chatUserId;
     await api(`/api/messages/${state.chatUserId}`, { method: 'DELETE' });
     state.chatUserId = null;
-    $('#chat-empty').style.display = 'flex'; $('#chat-active').style.display = 'none';
-    // Мобильный: возвращаем список диалогов
+    $('#chat-active').style.display = 'none';
+    $('#chat-empty').style.display = 'flex';
     document.querySelector('.messenger-layout')?.classList.remove('chat-open');
     await loadConversations();
-    await loadMessagesCount();
+    // Уведомляем другого пользователя что переписка удалена
+    socket.emit('chat_deleted', { userId: deletedUserId });
     notify('Переписка удалена');
   } catch (e) { notify('Ошибка: ' + e.message, 'error'); }
 };

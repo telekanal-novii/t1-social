@@ -202,6 +202,16 @@ function setupSocket(io, db) {
         io.to(targetSocket).emit('user_stop_typing', { fromUserId: Number(userId) });
       }
     });
+
+    // Переписка удалена — уведомить собеседника
+    socket.on('chat_deleted', ({ userId: targetUserId }) => {
+      const target = parseInt(targetUserId);
+      if (!target || isNaN(target) || target == userId) return;
+      const targetSocket = connectedUsers.get(target);
+      if (targetSocket) {
+        io.to(targetSocket).emit('chat_deleted', { userId: Number(userId) });
+      }
+    });
   });
 
   return connectedUsers;

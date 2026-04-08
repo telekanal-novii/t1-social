@@ -332,7 +332,15 @@ $('#feed-post-content')?.addEventListener('input', e => {
 
 // Публикация поста на своей стене
 $('#publish-post-btn')?.addEventListener('click', () => publishPost());
+// Флаги защиты от двойного клика
+const publishingPosts = new Set();
+
 async function publishPost(uid = userId, inId = 'post-content', ctrId = 'char-count', wId = 'wall-posts') {
+  // Защита от двойного клика
+  const publishKey = `${uid}-${inId}`;
+  if (publishingPosts.has(publishKey)) return;
+  publishingPosts.add(publishKey);
+
   const ta = $(`#${inId}`);
   const content = ta?.value.trim();
   const fileId = inId === 'feed-post-content' ? 'feed-post-file' : inId === 'other-post-content' ? 'other-post-file' : 'post-file';
@@ -377,6 +385,7 @@ async function publishPost(uid = userId, inId = 'post-content', ctrId = 'char-co
     else await loadWall(uid, wId);
     notify('Пост опубликован!');
   } catch (e) { notify('Ошибка: ' + e.message, 'error'); }
+  finally { publishingPosts.delete(publishKey); }
 }
 
 // Прикрепление изображений к постам
