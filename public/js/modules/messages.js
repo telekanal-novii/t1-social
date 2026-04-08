@@ -136,24 +136,29 @@ window.openChat = async function(fId, fName, fAvatar, fUsername = '') {
 
   // Переключаем на страницу сообщений
   $$('.nav-link').forEach(l => l.classList.remove('active'));
+  const msgLink = $('[data-page="messages"]');
+  if (msgLink) msgLink.classList.add('active');
+
   $$('.page').forEach(p => p.classList.remove('active'));
-  $('[data-page="messages"]')?.classList.add('active');
-  $('#messages-page')?.classList.add('active');
+  const msgPage = $('#messages-page');
+  if (msgPage) msgPage.classList.add('active');
   history.pushState({ page: 'messages' }, '', '/messages');
 
-  // НЕ сбрасываем chat-open — он нужен для мобильного перехода
-  // resetChatView() вызывается только при загрузке страницы
-
   // Показываем чат
-  $('#chat-empty').style.display = 'none';
-  $('#chat-active').style.display = 'flex';
+  const chatEmpty = $('#chat-empty');
+  const chatActive = $('#chat-active');
+  if (chatEmpty) chatEmpty.style.display = 'none';
+  if (chatActive) chatActive.style.display = 'flex';
 
   // Мобильный: переключаем на экран чата
   const isMobile = window.innerWidth <= 768;
-  if (isMobile) {
-    document.querySelector('.messenger-layout')?.classList.add('chat-open');
-  } else {
-    document.querySelector('.messenger-layout')?.classList.remove('chat-open');
+  const messengerLayout = document.querySelector('.messenger-layout');
+  if (messengerLayout) {
+    if (isMobile) {
+      messengerLayout.classList.add('chat-open');
+    } else {
+      messengerLayout.classList.remove('chat-open');
+    }
   }
 
   const el = $('#chat-username');
@@ -264,15 +269,15 @@ window.renderMessageBubble = async function(m) {
   }
 
   let fileHTML = '';
-  if (m.type === 'image' || m.file_url) {
-    const isImage = m.type === 'image';
-    // Извлекаем оригинальное имя файла из file_name, content или URL
+  if (m.file_url) {
+    // Извлекаем оригинальное имя файла
     let fileName = '';
     if (m.file_name) fileName = m.file_name;
     else if (m.content && !E2E.isEncrypted(m.content) && m.content.length < 100) fileName = m.content;
     else if (m.file_url) fileName = m.file_url.split('/').pop().replace(/^[a-f0-9-]+\./, '');
 
-    if (isImage) {
+    const safeUrl = sanitizeUrl(m.file_url);
+    if (m.type === 'image') {
       fileHTML = `<div class="msg-file"><img src="${safeUrl}" class="msg-image" data-action="view-media" data-url="${m.file_url}" data-type="image">${fileName ? `<div class="msg-file-name">${esc(fileName)}</div>` : ''}</div>`;
     } else if (m.type === 'audio') {
       let audioName = fileName;
@@ -283,6 +288,21 @@ window.renderMessageBubble = async function(m) {
     } else if (m.type === 'file') {
       const displayName = fileName || 'Файл';
       fileHTML = `<div class="msg-file"><a href="${safeUrl}" class="msg-file-link" download>📎 ${esc(displayName)}</a></div>`;
+    } else {
+      // Комбинированное сообщение: текст + файл (тип 'text' но есть file_url)
+      // Определяем тип файла по расширению
+      const ext = (m.file_url.split('.').pop() || '').toLowerCase();
+      if (/\.(jpg|jpeg|png|gif|webp)$/.test(ext)) {
+        fileHTML = `<div class="msg-file"><img src="${safeUrl}" class="msg-image" data-action="view-media" data-url="${m.file_url}" data-type="image">${fileName ? `<div class="msg-file-name">${esc(fileName)}</div>` : ''}</div>`;
+      } else if (/\.(mp3|wav|ogg|flac|m4a|aac)$/.test(ext)) {
+        let audioName = fileName || m.file_url.split('/').pop().replace(/\.[^.]+$/, '');
+        fileHTML = `<div class="msg-file"><div class="audio-player" data-src="${safeUrl}" data-name="${esc(audioName)}"><div class="audio-play-btn" data-action="toggle-audio"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div><div class="audio-info"><div class="audio-name">${esc(audioName)}</div><div class="audio-controls"><div class="audio-progress-wrap" data-action="seek-audio"><div class="audio-progress-bar"><div class="audio-progress-fill" style="width:0%"></div></div></div><div class="audio-time"><span class="cur">0:00</span><span class="tot"></span></div></div></div><audio src="${safeUrl}" preload="metadata"></audio></div></div>`;
+      } else if (/\.(mp4|webm|mkv|avi)$/.test(ext)) {
+        fileHTML = `<div class="msg-file"><video controls class="msg-video" src="${safeUrl}"></video></div>`;
+      } else {
+        const displayName = fileName || 'Файл';
+        fileHTML = `<div class="msg-file"><a href="${safeUrl}" class="msg-file-link" download>📎 ${esc(displayName)}</a></div>`;
+      }
     }
   }
 

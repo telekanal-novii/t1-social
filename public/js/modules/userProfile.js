@@ -38,6 +38,9 @@ async function renderUserProfile(profile) {
   const set = (id, val) => { const el = $(id); if (el) el.textContent = val; };
   const show = (id, val) => { const el = $(id); if (el) el.style.display = val ? (el.tagName === 'IMG' ? 'block' : 'flex') : 'none'; };
 
+  // КРИТИЧНО: сохраняем состояние музыкального плеера
+  const musicPlaying = typeof audioEl !== 'undefined' && audioEl && !audioEl.paused;
+
   // Переключаем на страницу профиля
   $$('.nav-link').forEach(l => l.classList.remove('active'));
   $$('.page').forEach(p => p.classList.remove('active'));

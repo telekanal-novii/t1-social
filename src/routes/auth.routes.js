@@ -14,17 +14,31 @@ const { JWT_SECRET } = require('../middleware/auth');
 
 /**
  * Устанавливает httpOnly cookie с токеном
+ * КРИТИЧНО: запрещаем кэширование чтобы CDN не сохранял куки
  */
 function setTokenCookie(res, token) {
   const isProd = process.env.NODE_ENV === 'production';
+  // Запрещаем CDN/браузеру кэшировать ответ с куками
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.set('Surrogate-Control', 'no-store');
+  
   res.cookie('token', token, {
     httpOnly: true,
     secure: isProd,
-    sameSite: 'strict',
+    sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 дней
-    path: '/',
-    ...(isProd ? { domain: process.env.COOKIE_DOMAIN || undefined } : {})
+    path: '/'
   });
+}
+
+/**
+ * Создаёт отпечаток устройства из User-Agent
+ */
+function createDeviceFingerprint(req) {
+  const ua = req.headers['user-agent'] || '';
+  return require('crypto').createHash('md5').update(ua.slice(0, 128)).digest('hex').slice(0, 16);
 }
 
 /**
@@ -64,11 +78,14 @@ router.post('/api/register', async (req, res) => {
         }
 
         const userId = this.lastID;
+        // Привязываем токен к устройству
+        const deviceFp = createDeviceFingerprint(req);
         const token = jwt.sign({
           id: userId,
           username,
           jti: crypto.randomUUID(),
-          iat: Date.now()
+          iat: Date.now(),
+          device: deviceFp
         }, JWT_SECRET, { expiresIn: '7d' });
         setTokenCookie(res, token);
         res.status(201).json({ userId, username });
@@ -99,11 +116,14 @@ router.post('/api/login', (req, res) => {
       const isValid = await bcrypt.compare(password, user.password);
       if (!isValid) return res.status(401).json({ error: 'Неверный логин или пароль' });
 
+      // Привязываем токен к устройству
+      const deviceFp = createDeviceFingerprint(req);
       const token = jwt.sign({
         id: user.id,
         username: user.username,
         jti: crypto.randomUUID(),
-        iat: Date.now()
+        iat: Date.now(),
+        device: deviceFp
       }, JWT_SECRET, { expiresIn: '7d' });
       setTokenCookie(res, token);
       res.json({ userId: user.id, username: user.username });

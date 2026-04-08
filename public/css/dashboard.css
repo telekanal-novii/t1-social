@@ -1257,6 +1257,10 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-pri
 
 /* ===== TABLET: 1024px ===== */
 @media (max-width: 1024px) {
+  .sidebar {
+    overflow-y: auto;
+    max-height: 100vh;
+  }
   .burger-btn { display: flex !important; }
   .sidebar-close { display: flex !important; }
 
@@ -1549,13 +1553,13 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-pri
 
   /* Когда чат активен — скрываем список диалогов */
   .messenger-layout.chat-open .conversations-panel-modern {
-    transform: translateX(-100%);
-    opacity: 0;
-    pointer-events: none;
+    transform: translateX(-100%) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
   }
 
   .messenger-layout.chat-open .chat-panel-modern {
-    z-index: 3;
+    z-index: 10 !important;
   }
 
   .chat-panel-modern {
@@ -2165,8 +2169,12 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-pri
   }
 
   .sidebar-footer {
-    padding: 12px 8px;
+    padding: 12px 8px 60px;
     gap: 6px;
+    margin-top: auto;
+    position: sticky;
+    bottom: 0;
+    background: var(--bg-secondary);
   }
 
   /* Модалки */

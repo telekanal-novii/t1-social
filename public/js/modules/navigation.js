@@ -15,6 +15,11 @@ function navigateTo(page, pushState = true) {
   if (page === currentPage && pushState) return;
   currentPage = page;
 
+  // КРИТИЧНО: сохраняем состояние музыкального плеера при навигации
+  const musicPlaying = typeof audioEl !== 'undefined' && audioEl && !audioEl.paused;
+  const musicSrc = typeof audioEl !== 'undefined' && audioEl ? audioEl.src : '';
+  const musicTime = typeof audioEl !== 'undefined' && audioEl ? audioEl.currentTime : 0;
+
   $$('.nav-link').forEach(l => l.classList.remove('active'));
   const link = $(`.nav-link[data-page="${page}"]`);
   if (link) link.classList.add('active');

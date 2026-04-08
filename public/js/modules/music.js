@@ -6,6 +6,7 @@ let musicTracks = [];
 let currentTrack = null;
 let audioEl = null;
 let isPlaying = false;
+let repeatMode = 0; // 0 = no repeat, 1 = repeat all, 2 = repeat one
 
 /**
  * Инициализация глобального плеера
@@ -69,9 +70,7 @@ function renderMusicTracks() {
     return `<div class="music-track-item ${isCurrent && isPlaying ? 'playing' : ''}" data-track-id="${t.id}">
       <div class="music-track-info">
         <div class="music-track-icon">
-          ${isCurrent && isPlaying
-            ? `<svg viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px;color:var(--primary)"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`
-            : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>`}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
         </div>
         <div class="music-track-details">
           <div class="music-track-title">${esc(displayName)}</div>
@@ -140,6 +139,20 @@ function playNext() {
     return;
   }
   const idx = musicTracks.findIndex(t => t.id === currentTrack.id);
+
+  // Repeat one — повторяем текущий трек
+  if (repeatMode === 2) {
+    audioEl.currentTime = 0;
+    audioEl.play().catch(() => {});
+    return;
+  }
+
+  // Repeat all — после последнего трека играем первый
+  if (repeatMode === 1 && idx === musicTracks.length - 1) {
+    playTrack(musicTracks[0].id);
+    return;
+  }
+
   if (idx >= 0 && idx < musicTracks.length - 1) {
     playTrack(musicTracks[idx + 1].id);
   } else {
@@ -157,11 +170,11 @@ function playPrev() {
   const idx = musicTracks.findIndex(t => t.id === currentTrack.id);
   if (idx > 0) {
     playTrack(musicTracks[idx - 1].id);
+  } else if (repeatMode > 0) {
+    // Если повтор включён — переходим к последнему треку
+    playTrack(musicTracks[musicTracks.length - 1].id);
   } else {
-    // В начало трека
-    if (audioEl) {
-      audioEl.currentTime = 0;
-    }
+    if (audioEl) audioEl.currentTime = 0;
   }
 }
 
@@ -328,6 +341,30 @@ $('#gp-play')?.addEventListener('click', () => {
 
 $('#gp-prev')?.addEventListener('click', playPrev);
 $('#gp-next')?.addEventListener('click', playNext);
+
+// Кнопка повтора
+$('#gp-repeat')?.addEventListener('click', () => {
+  repeatMode = (repeatMode + 1) % 3;
+  const icon = $('#gp-repeat-icon');
+  if (icon) {
+    if (repeatMode === 0) {
+      // Без повтора
+      icon.innerHTML = '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>';
+      $('#gp-repeat').style.color = '';
+      $('#gp-repeat').title = 'Повтор';
+    } else if (repeatMode === 1) {
+      // Повтор всех
+      icon.innerHTML = '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>';
+      $('#gp-repeat').style.color = 'var(--primary)';
+      $('#gp-repeat').title = 'Повтор всех';
+    } else {
+      // Повтор одного
+      icon.innerHTML = '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><text x="12" y="15" text-anchor="middle" fill="currentColor" stroke="none" font-size="8" font-weight="bold">1</text>';
+      $('#gp-repeat').style.color = 'var(--primary)';
+      $('#gp-repeat').title = 'Повтор одного';
+    }
+  }
+});
 
 // Громкость
 $('#gp-volume')?.addEventListener('input', e => {
