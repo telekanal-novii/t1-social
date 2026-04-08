@@ -193,7 +193,10 @@ window.initNavigation = function() {
 
   const myUsername = window.currentUsername;
 
-  if (!VALID_PAGES.includes(initPath) && initPath) {
+  // Валидация URL — только безопасные символы
+  const safePath = /^[a-zA-Z0-9_-]+$/.test(initPath);
+
+  if (!VALID_PAGES.includes(initPath) && initPath && safePath) {
     // Путь — это username
     if (myUsername && initPath === myUsername) {
       // Свой профиль — показываем страницу профиля
@@ -211,6 +214,7 @@ window.initNavigation = function() {
       window.openUserProfileByUsername(initPath);
     }
   } else {
+    // Невалидный путь — редирект на ленту
     navigateTo(VALID_PAGES.includes(initPath) ? initPath : 'feed', false);
   }
 };

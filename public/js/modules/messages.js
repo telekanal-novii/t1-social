@@ -288,9 +288,9 @@ window.renderMessageBubble = async function(m) {
 
   // Текст показываем даже если есть файл (комбинированное сообщение)
   const hasText = m.type === 'text' || (m.type === 'e2e' && displayContent && !E2E.isEncrypted(displayContent));
-  const text = hasText ? `<span class="msg-content">${esc(displayContent)}</span>` : '';
+  const text = hasText ? `<div class="msg-text-content">${esc(displayContent)}</div>` : '';
 
-  return `<div class="message-bubble ${isSent ? 'sent' : 'received'}">${text}${fileHTML}<span class="message-time">${t}</span></div>`;
+  return `<div class="message-bubble ${isSent ? 'sent' : 'received'}">${text}${fileHTML}<div class="message-time">${t}</div></div>`;
 };
 
 /**
@@ -461,6 +461,43 @@ window.sendMessageFile = async function(file, receiverId) {
     const up = await api('/api/messages/upload', { method: 'POST', body: fd });
     socket.emit('send_message', { receiverId, content: up.fileName, type: up.type, fileUrl: up.fileUrl });
   } catch (e) { notify('Ошибка загрузки: ' + e.message, 'error'); }
+};
+
+// Отправка файлов из drag&drop вместе с текстом
+window.sendDroppedFiles = async function() {
+  const files = window._droppedFiles || [];
+  if (!files.length || !state.chatUserId) { cancelDropPreview(); return; }
+
+  const input = $('#message-input');
+  const textContent = input?.value.trim() || '';
+
+  // Загружаем первый файл (если несколько — отправляем по одному)
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const isFirst = i === 0;
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const up = await api('/api/messages/upload', { method: 'POST', body: fd });
+      // Для первого файла добавляем текст
+      let content = up.fileName;
+      let type = up.type;
+      if (isFirst && textContent) {
+        const encrypted = await encryptMessageForUser(textContent, state.chatUserId);
+        content = encrypted.content;
+        type = 'text'; // тип будет 'text', но файл тоже есть
+      }
+      socket.emit('send_message', {
+        receiverId: state.chatUserId,
+        content,
+        type: isFirst && textContent ? 'text' : type,
+        fileUrl: up.fileUrl,
+        fileName: up.fileName
+      });
+    } catch (e) { notify('Ошибка загрузки: ' + e.message, 'error'); }
+  }
+  if (input) input.value = '';
+  cancelDropPreview();
 };
 
 // Drop zone
