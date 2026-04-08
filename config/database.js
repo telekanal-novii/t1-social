@@ -58,6 +58,7 @@ function initializeDatabase() {
       user_id INTEGER NOT NULL,
       author_id INTEGER NOT NULL,
       content TEXT NOT NULL,
+      image_url TEXT DEFAULT '',
       likes INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id),
