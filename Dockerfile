@@ -8,9 +8,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
-RUN npm install --production
+RUN npm install --production && npm cache clean --force
 
-COPY . .
+# Force fresh copy (ADD invalidates cache more aggressively)
+ADD . .
 
 # Создаём директории для загруженных файлов
 RUN mkdir -p public/avatars public/media
