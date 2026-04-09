@@ -26,3 +26,8 @@ test-database.sqlite
 
 # Database (HF Spaces хранит существующую БД между билдами)
 database.sqlite
+database.sqlite-shm
+database.sqlite-wal
+
+# Avatars (создаются на сервере)
+public/avatars/
