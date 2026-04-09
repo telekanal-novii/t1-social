@@ -45,8 +45,11 @@ router.get('/api/wall/feed', authenticateToken, async (req, res) => {
     // Загружаем посты
     const posts = await dbAll(
       `SELECT wp.id, wp.user_id, wp.author_id, wp.content, wp.image_url, wp.likes, wp.created_at,
-              u.username, u.display_name, u.avatar
-       FROM wall_posts wp INNER JOIN users u ON wp.author_id = u.id
+              u.username, u.display_name, u.avatar,
+              ow.username as wall_owner_username, ow.display_name as wall_owner_name
+       FROM wall_posts wp 
+       INNER JOIN users u ON wp.author_id = u.id
+       INNER JOIN users ow ON wp.user_id = ow.id
        ${whereClause}
        ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
       [...params, limit, offset]
@@ -115,8 +118,11 @@ router.get('/api/wall/:userId', authenticateToken, async (req, res) => {
 
     const posts = await dbAll(
       `SELECT wp.id, wp.user_id, wp.author_id, wp.content, wp.image_url, wp.likes, wp.created_at,
-              u.username, u.display_name, u.avatar
-       FROM wall_posts wp INNER JOIN users u ON wp.author_id = u.id
+              u.username, u.display_name, u.avatar,
+              ow.username as wall_owner_username, ow.display_name as wall_owner_name
+       FROM wall_posts wp 
+       INNER JOIN users u ON wp.author_id = u.id
+       INNER JOIN users ow ON wp.user_id = ow.id
        WHERE wp.user_id = ? ORDER BY wp.created_at DESC LIMIT ? OFFSET ?`,
       [wallOwnerId, limit, offset]
     );
@@ -192,8 +198,11 @@ router.post('/api/wall/:userId', authenticateToken, upload.single('image'), vali
     // Отправляем новый пост всем подключённым клиентам
     const post = await dbGet(
       `SELECT wp.id, wp.user_id, wp.author_id, wp.content, wp.image_url, wp.likes, wp.created_at,
-              u.username, u.display_name, u.avatar
-       FROM wall_posts wp INNER JOIN users u ON wp.author_id = u.id
+              u.username, u.display_name, u.avatar,
+              ow.username as wall_owner_username, ow.display_name as wall_owner_name
+       FROM wall_posts wp 
+       INNER JOIN users u ON wp.author_id = u.id
+       INNER JOIN users ow ON wp.user_id = ow.id
        WHERE wp.id = ?`,
       [lastID]
     );

@@ -363,23 +363,60 @@ $('#gp-next')?.addEventListener('click', playNext);
 $('#gp-repeat')?.addEventListener('click', () => {
   repeatMode = (repeatMode + 1) % 3;
   const icon = $('#gp-repeat-icon');
+  const btn = $('#gp-repeat');
   if (icon) {
     if (repeatMode === 0) {
       // Без повтора
       icon.innerHTML = '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>';
-      $('#gp-repeat').style.color = '';
-      $('#gp-repeat').title = 'Повтор';
+      btn.classList.remove('active');
+      btn.title = 'Повтор';
     } else if (repeatMode === 1) {
       // Повтор всех
       icon.innerHTML = '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>';
-      $('#gp-repeat').style.color = 'var(--primary)';
-      $('#gp-repeat').title = 'Повтор всех';
+      btn.classList.add('active');
+      btn.title = 'Повтор всех';
     } else {
       // Повтор одного
       icon.innerHTML = '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><text x="12" y="15" text-anchor="middle" fill="currentColor" stroke="none" font-size="8" font-weight="bold">1</text>';
-      $('#gp-repeat').style.color = 'var(--primary)';
-      $('#gp-repeat').title = 'Повтор одного';
+      btn.classList.add('active');
+      btn.title = 'Повтор одного';
     }
+  }
+});
+
+// Закрыть плеер
+$('#gp-close')?.addEventListener('click', () => {
+  // Остановить музыку
+  if (audioEl) {
+    audioEl.pause();
+    audioEl.src = '';
+    isPlaying = false;
+    currentTrack = null;
+  }
+
+  // Сбросить прогресс
+  const progressBar = $('#gp-progress');
+  if (progressBar) progressBar.style.width = '0%';
+  const currentTime = $('#gp-current');
+  if (currentTime) currentTime.textContent = '0:00';
+  const duration = $('#gp-duration');
+  if (duration) duration.textContent = '0:00';
+  const title = $('#gp-title');
+  if (title) title.textContent = '';
+  const artist = $('#gp-artist');
+  if (artist) artist.textContent = '';
+
+  // Скрыть плеер с анимацией
+  const player = $('#global-music-player');
+  if (player) {
+    player.style.transition = 'transform .3s ease, opacity .3s ease';
+    player.style.transform = 'translateY(100%)';
+    player.style.opacity = '0';
+    setTimeout(() => {
+      player.style.display = 'none';
+      player.style.transform = '';
+      player.style.opacity = '';
+    }, 300);
   }
 });
 

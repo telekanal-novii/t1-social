@@ -25,16 +25,24 @@ function postCardHTML(p, userId, showComments = false) {
     ? `<button class="wall-post-action-btn edit-post" data-post-id="${p.id}" title="Редактировать"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button><button class="wall-post-action-btn delete-post" data-post-id="${p.id}" title="Удалить"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>`
     : '';
 
+  // Подпись "в профиле @username" если пост на чужой стене
+  let wallOwnerLabel = '';
+  if (p.user_id && p.author_id && p.user_id !== p.author_id) {
+    const wallOwnerUsername = p.wall_owner_username || p.wall_owner_name || 'пользователя';
+    wallOwnerLabel = `<div class="wall-post-wall-label">в профиле <a href="/${esc(wallOwnerUsername)}" class="post-author-link" data-username="${esc(wallOwnerUsername)}">@${esc(wallOwnerUsername)}</a></div>`;
+  }
+
   return `<div class="wall-post-card" data-post-id="${p.id}">
     <div class="wall-post-header">
       ${av}
       <div class="wall-post-author">
         <a href="/${esc(p.username)}" class="wall-post-author-name post-author-link" data-username="${esc(p.username)}">${esc(p.display_name || p.username)}</a>
       </div>
+      ${wallOwnerLabel}
       <div class="wall-post-time">${t}</div>
       ${actionBtns}
     </div>
-    <div class="wall-post-content" data-post-id="${p.id}">${esc(p.content || '')}</div>${imgHTML}
+    <div class="wall-post-content" data-post-id="${p.id}">${linkifyText(p.content || '')}</div>${imgHTML}
     <div class="wall-post-actions">
       <button class="wall-post-action-btn like-post ${lk ? 'liked' : ''}" data-post-id="${p.id}" data-likes="${p.likes}">
         <svg viewBox="0 0 24 24" fill="${lk ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
@@ -133,7 +141,7 @@ async function loadCommentsPreview(container) {
                         <a href="/${esc(c.username)}" class="comment-author post-author-link" data-username="${esc(c.username)}">${esc(c.display_name || c.username)}</a>
                         <span class="comment-time">${t}</span>
                     </div>
-                    <div class="comment-text">${esc(c.content)}</div>
+                    <div class="comment-text">${linkifyText(c.content)}</div>
                 </div>
                 ${c.user_id == userId ? `<button class="edit-comment" data-comment-id="${c.id}" data-post-id="${postId}" title="Редактировать"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button><button class="delete-comment" data-comment-id="${c.id}" data-post-id="${postId}" title="Удалить"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg></button>` : ''}
             `;
@@ -286,6 +294,19 @@ $('#avatar-file')?.addEventListener('change', e => {
 });
 $('#avatar-submit-btn')?.addEventListener('click', async () => {
   if (!selectedAvatarFile) return notify('Выберите файл', 'error');
+  
+  // Проверка размера файла (макс 5MB)
+  const maxSize = 5 * 1024 * 1024;
+  if (selectedAvatarFile.size > maxSize) {
+    return notify(`Файл слишком большой (макс. 5MB). Сейчас: ${(selectedAvatarFile.size / 1024 / 1024).toFixed(2)}MB`, 'error');
+  }
+  
+  // Проверка типа файла
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+  if (!allowedTypes.includes(selectedAvatarFile.type)) {
+    return notify('Неподдерживаемый формат. Используйте JPG, PNG, GIF или WebP', 'error');
+  }
+  
   const fd = new FormData(); fd.append('avatar', selectedAvatarFile);
   try {
     const result = await api('/api/profile/avatar', { method: 'PUT', body: fd });
@@ -619,7 +640,7 @@ window.loadComments = async function(postId, card, showAll = false) {
             <a href="/${esc(c.username)}" class="comment-author post-author-link" data-username="${esc(c.username)}">${esc(c.display_name || c.username)}</a>
             <span class="comment-time">${t}</span>
           </div>
-          <div class="comment-text">${esc(c.content)}</div>
+          <div class="comment-text">${linkifyText(c.content)}</div>
         </div>
         ${c.user_id == userId ? `<button class="edit-comment" data-comment-id="${c.id}" data-post-id="${postId}" title="Редактировать"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button><button class="delete-comment" data-comment-id="${c.id}" data-post-id="${postId}" title="Удалить"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg></button>` : ''}
       `;

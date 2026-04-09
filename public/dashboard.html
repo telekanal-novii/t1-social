@@ -565,17 +565,28 @@
     <!-- Управление + прогресс -->
     <div class="global-player-center">
       <div class="global-player-controls">
-        <button class="gp-btn" id="gp-repeat" title="Повтор">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="gp-repeat-icon"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        <button class="gp-btn gp-repeat" id="gp-repeat" title="Повтор">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="gp-repeat-icon">
+            <polyline points="17 1 21 5 17 9"/>
+            <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+            <polyline points="7 23 3 19 7 15"/>
+            <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+          </svg>
         </button>
         <button class="gp-btn gp-skip" id="gp-prev" title="Предыдущий">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+          </svg>
         </button>
-        <button class="gp-btn gp-play" id="gp-play" title="Воспроизвести/Пауза">
-          <svg viewBox="0 0 24 24" fill="currentColor" id="gp-play-icon"><path d="M8 5v14l11-7z"/></svg>
+        <button class="gp-btn gp-play" id="gp-play" title="Воспроизвести">
+          <svg viewBox="0 0 24 24" fill="currentColor" id="gp-play-icon">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
         </button>
         <button class="gp-btn gp-skip" id="gp-next" title="Следующий">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zm-10 6l8.5 6V6z" transform="scale(-1,1) translate(-24,0)"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" transform="matrix(-1 0 0 1 24 0)"/>
+          </svg>
         </button>
         <span class="gp-time"><span id="gp-current">0:00</span> / <span id="gp-duration">0:00</span></span>
       </div>
@@ -591,6 +602,14 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon></svg>
       <input type="range" id="gp-volume" min="0" max="1" step="0.05" value="1">
     </div>
+
+    <!-- Кнопка закрытия -->
+    <button class="gp-btn gp-close" id="gp-close" title="Закрыть плеер">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <line x1="18" y1="6" x2="6" y2="18"/>
+        <line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
   </div>
 
   <!-- Модалка настроек -->

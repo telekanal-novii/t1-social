@@ -121,11 +121,11 @@ if (typeof socket !== 'undefined') {
       }
     }
 
-    // Уведомление
-    const authorName = post.display_name || post.username;
-    if (typeof notify === 'function') {
-      notify(`📝 ${authorName} опубликовал пост`);
-    }
+    // Уведомление отключено (слишком шумное)
+    // const authorName = post.display_name || post.username;
+    // if (typeof notify === 'function') {
+    //   notify(`📝 ${authorName} опубликовал пост`);
+    // }
   });
 }
 

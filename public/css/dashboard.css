@@ -1066,8 +1066,52 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-pri
 .media-viewer-body { pointer-events: none; }
 .media-viewer-close { position: absolute; top: -50px; right: 0; width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.15); color: white; font-size: 20px; cursor: pointer; transition: all .2s ease; display: flex; align-items: center; justify-content: center; pointer-events: auto; }
 .media-viewer-close:hover { background: rgba(255,255,255,.2); transform: scale(1.1); }
-.img-zoom-wrap { overflow: hidden; display: flex; align-items: center; justify-content: center; width: 90vw; height: 85vh; border-radius: 8px; touch-action: none; pointer-events: none; }
-.media-viewer-img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; cursor: default; transition: transform 0.15s ease; user-select: none; -webkit-user-drag: none; will-change: transform; pointer-events: auto; }
+
+/* Zoom controls */
+.media-viewer-zoom-controls {
+  position: absolute;
+  bottom: -50px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+.media-viewer-zoom-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.15);
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all .2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.media-viewer-zoom-btn:hover { background: rgba(255,255,255,.2); transform: scale(1.1); }
+.media-viewer-zoom-level {
+  color: rgba(255,255,255,.7);
+  font-size: 13px;
+  min-width: 50px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.media-viewer-img {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  cursor: grab;
+  transition: transform 0.15s ease;
+  user-select: none;
+  -webkit-user-drag: none;
+  will-change: transform;
+  pointer-events: auto;
+  transform-origin: center center;
+}
+.media-viewer-img:active { cursor: grabbing; }
 .media-viewer-video { max-width: 95vw; max-height: 85vh; border-radius: 8px; pointer-events: auto; }
 .media-viewer-audio-wrap { display: flex; align-items: center; justify-content: center; padding: 60px; }
 .media-viewer-audio-wrap audio { width: 400px; max-width: 90vw; }
@@ -1150,12 +1194,41 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-pri
 .wall-post-card:hover::before { background: var(--primary); }
 .wall-post-card:last-child { border-bottom: none; }
 
-.wall-post-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.wall-post-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
 .wall-post-author { flex: 1; min-width: 0; }
 .wall-post-author-name { font-size: 15px; font-weight: 600; color: var(--text-primary); cursor: pointer; text-decoration: none; transition: color .2s ease; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wall-post-author-name:hover { color: var(--primary); }
+.wall-post-wall-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.wall-post-wall-label a {
+  color: var(--primary-light);
+  text-decoration: none;
+  font-weight: 500;
+}
+.wall-post-wall-label a:hover {
+  text-decoration: underline;
+}
 .wall-post-time { font-size: 13px; color: var(--text-muted); flex-shrink: 0; }
-.wall-post-content { font-size: 15px; line-height: 1.6; color: var(--text-primary); margin-bottom: 0; }
+.wall-post-content { font-size: 15px; line-height: 1.6; color: var(--text-primary); margin-bottom: 0; word-wrap: break-word; }
+.wall-post-content a.post-link {
+  color: var(--primary-light);
+  text-decoration: underline;
+  word-break: break-all;
+}
+.wall-post-content a.post-link:hover {
+  color: var(--primary);
+}
+.comment-text a.post-link {
+  color: var(--primary-light);
+  text-decoration: underline;
+  word-break: break-all;
+}
+.comment-text a.post-link:hover {
+  color: var(--primary);
+}
 .wall-post-actions { gap: 8px; padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--border-color); display: flex; align-items: center; }
 
 .wall-post-action-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: transparent; border: 1px solid transparent; color: var(--text-muted); font-size: 13px; font-weight: 500; cursor: pointer; border-radius: var(--radius-full); transition: all .25s ease; }

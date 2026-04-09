@@ -16,6 +16,7 @@
 const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
+const ffmpeg = require('fluent-ffmpeg');
 const { checkMagicBytesFile } = require('../utils/magicBytes');
 const { createUpload } = require('../utils/uploadFactory');
 
@@ -73,7 +74,11 @@ const UPLOAD_CONFIGS = {
     },
     outputFormat: 'smart',
     outputQuality: 80,
-    compressOnlyImages: true, // Не сжимать аудио/видео
+    compressAudio: true,    // Сжимать аудио
+    compressVideo: true,    // Сжимать видео
+    audioBitrate: '128k',   // Битрейт аудио
+    videoPreset: 'medium',  // Пресет видео (ultrafast, medium, slow)
+    videoCrf: 28,           // Качество видео (18-28)
     field: 'file'
   }
 };
@@ -114,7 +119,19 @@ function createUploader(type) {
       console.log(`[upload:${type}] Processing file:`, req.file.originalname, 'at', req.file.path);
       
       // Проверяем magic bytes
-      const mimeType = checkMagicBytesFile(req.file.path);
+      let mimeType;
+      try {
+        mimeType = checkMagicBytesFile(req.file.path);
+      } catch (magicErr) {
+        console.error(`[upload:${type}] Error checking magic bytes:`, magicErr.message);
+        // Если не удалось проверить — пробуем определить по расширению
+        const ext = path.extname(req.file.originalname).toLowerCase();
+        const extToMime = {
+          '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+          '.gif': 'image/gif', '.webp': 'image/webp'
+        };
+        mimeType = extToMime[ext] || null;
+      }
       console.log(`[upload:${type}] Detected MIME:`, mimeType);
 
       if (!mimeType) {
@@ -127,9 +144,12 @@ function createUploader(type) {
 
       // Сжимаем только изображения (если включено)
       const isImage = mimeType.startsWith('image/');
+      const isAudio = mimeType.startsWith('audio/') || /\.(mp3|wav|ogg|flac|m4a|aac)$/i.test(req.file.originalname);
+      const isVideo = mimeType.startsWith('video/') || /\.(mp4|webm|mkv|avi)$/i.test(req.file.originalname);
+      
       const shouldCompress = isImage && (!config.compressOnlyImages || config.compressOnlyImages);
 
-      console.log(`[upload:${type}] Is image:`, isImage, 'Should compress:', shouldCompress);
+      console.log(`[upload:${type}] Is image:`, isImage, 'Is audio:', isAudio, 'Is video:', isVideo, 'Should compress image:', shouldCompress);
 
       if (shouldCompress && !mimeType.includes('gif')) {
         console.log(`[upload:${type}] Compressing image...`);
@@ -147,6 +167,20 @@ function createUploader(type) {
             req.file.mimetype = 'image/jpeg';
           }
         }
+      } else if (isAudio && config.compressAudio) {
+        console.log(`[upload:${type}] Compressing audio...`);
+        const newPath = await compressAudio(req.file.path, config);
+        req.file.path = newPath;
+        req.file.filename = path.basename(newPath);
+        req.file.mimetype = 'audio/mpeg';
+        console.log(`[upload:${type}] Audio compression complete`);
+      } else if (isVideo && config.compressVideo) {
+        console.log(`[upload:${type}] Compressing video...`);
+        const newPath = await compressVideo(req.file.path, config);
+        req.file.path = newPath;
+        req.file.filename = path.basename(newPath);
+        req.file.mimetype = 'video/mp4';
+        console.log(`[upload:${type}] Video compression complete`);
       }
 
       console.log(`[upload:${type}] Validation successful`);
@@ -225,6 +259,84 @@ async function compressImage(filePath, config) {
   }
   
   return filePath;
+}
+
+// ======================== СЖАТИЕ АУДИО ========================
+
+/**
+ * Сжимает аудиофайл через FFmpeg
+ * @param {string} filePath — путь к файлу
+ * @param {Object} config — конфигурация
+ */
+function compressAudio(filePath, config) {
+  return new Promise((resolve, reject) => {
+    const outputPath = filePath + '.tmp.mp3';
+    
+    ffmpeg(filePath)
+      .audioBitrate(config.audioBitrate || '128k')
+      .audioCodec('libmp3lame')
+      .format('mp3')
+      .on('end', () => {
+        try {
+          // Заменяем оригинальный файл
+          fs.renameSync(outputPath, filePath);
+          resolve(filePath);
+        } catch (err) {
+          reject(err);
+        }
+      })
+      .on('error', (err) => {
+        console.error('[upload:audio] FFmpeg error:', err.message);
+        // Удаляем временный файл
+        try { if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath); } catch {}
+        // Если ffmpeg недоступен — оставляем оригинал
+        resolve(filePath);
+      })
+      .save(outputPath);
+  });
+}
+
+// ======================== СЖАТИЕ ВИДЕО ========================
+
+/**
+ * Сжимает видеофайл через FFmpeg
+ * @param {string} filePath — путь к файлу
+ * @param {Object} config — конфигурация
+ */
+function compressVideo(filePath, config) {
+  return new Promise((resolve, reject) => {
+    const ext = path.extname(filePath).toLowerCase();
+    const outputPath = filePath + '.tmp.mp4';
+    
+    ffmpeg(filePath)
+      .outputOptions([
+        '-c:v libx264',
+        `-crf ${config.videoCrf || 28}`,
+        `-preset ${config.videoPreset || 'medium'}`,
+        '-c:a aac',
+        `-b:a ${config.audioBitrate || '128k'}`,
+        '-movflags +faststart',
+        '-vf scale=\'min(1920,iw):min(1080,ih):force_original_aspect_ratio=decrease\'',
+      ])
+      .format('mp4')
+      .on('end', () => {
+        try {
+          // Заменяем оригинальный файл
+          fs.renameSync(outputPath, filePath.replace(/\.[^.]+$/, '.mp4'));
+          resolve(filePath.replace(/\.[^.]+$/, '.mp4'));
+        } catch (err) {
+          reject(err);
+        }
+      })
+      .on('error', (err) => {
+        console.error('[upload:video] FFmpeg error:', err.message);
+        // Удаляем временный файл
+        try { if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath); } catch {}
+        // Если ffmpeg недоступен — оставляем оригинал
+        resolve(filePath);
+      })
+      .save(outputPath);
+  });
 }
 
 // ======================== BACKWARD COMPATIBILITY ========================

@@ -79,7 +79,7 @@ router.put('/api/profile/avatar', authenticateToken, upload.single('avatar'), va
 
     // Получаем старый аватар
     const user = await dbGet('SELECT avatar FROM users WHERE id = ?', [req.user.id]);
-    
+
     // Обновляем аватар
     await dbRun('UPDATE users SET avatar = ? WHERE id = ?', [avatarPath, req.user.id]);
 

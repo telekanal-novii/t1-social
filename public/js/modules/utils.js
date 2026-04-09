@@ -99,6 +99,29 @@ socket.on('reconnect_failed', () => {
 const esc = t => { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
 
 /**
+ * Находит URL в тексте и оборачивает в <a>
+ * @param {string} text — исходный текст (НЕ экранированный)
+ * @returns {string} — HTML с кликабельными ссылками
+ */
+function linkifyText(text) {
+  if (!text) return '';
+  // Экранируем HTML сначала
+  const escaped = esc(text);
+  
+  // Regex для URL (поддерживает http, https, ftp, www)
+  const urlRegex = /(?:(?:https?|ftp):\/\/|www\.)[^\s<>"{}]+(?:\([^)]*\)|[^\s<()"{}])*/gi;
+  
+  return escaped.replace(urlRegex, (url) => {
+    // Если URL уже содержит < или > (значит уже в HTML) — пропускаем
+    if (url.includes('<') || url.includes('>')) return url;
+    
+    const href = url.startsWith('www.') ? 'https://' + url : url;
+    const display = url.length > 60 ? url.substring(0, 57) + '...' : url;
+    return `<a href="${sanitizeUrl(href)}" target="_blank" rel="noopener noreferrer" class="post-link">${display}</a>`;
+  });
+}
+
+/**
  * Санитизирует URL — блокирует javascript:, data:, vbscript: URI
  * @param {string} url
  * @returns {string}
@@ -259,12 +282,21 @@ if (!$('#slide-anim-style')) {
   document.head.appendChild(s);
 }
 
+// Делаем linkifyText глобальной
+window.linkifyText = linkifyText;
+
 // ======================== УВЕДОМЛЕНИЯ В РЕАЛЬНОМ ВРЕМЕНИ ========================
 
 // Debounce для уведомлений (не спамить одинаковыми)
 const _notifTimers = {};
 socket.on('notification', (data) => {
   const key = `${data.type}-${data.fromUserId}`;
+
+  // Счётчик обновляем всегда (без debounce)
+  if (data.type === 'friend_request' && typeof loadFriendRequestsCount === 'function') loadFriendRequestsCount();
+  if (data.type === 'new_message' && typeof loadMessagesCount === 'function') loadMessagesCount();
+
+  // А визуальное уведомление — с debounce
   if (_notifTimers[key]) return;
   _notifTimers[key] = setTimeout(() => delete _notifTimers[key], 5000);
 
@@ -274,8 +306,4 @@ socket.on('notification', (data) => {
     friend_accepted: `${data.fromUsername || 'Пользователь'} принял вашу заявку`
   };
   if (msgs[data.type]) notify(msgs[data.type], 'info');
-
-  // Обновляем счётчики
-  if (data.type === 'friend_request' && typeof loadFriendRequestsCount === 'function') loadFriendRequestsCount();
-  if (data.type === 'new_message' && typeof loadMessagesCount === 'function') loadMessagesCount();
 });
