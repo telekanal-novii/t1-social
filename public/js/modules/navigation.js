@@ -41,8 +41,8 @@ function navigateTo(page, pushState = true) {
   const loaders = {
     feed: loadAllUsers,
     people: loadPeople,
-    friends: () => { loadFriends(); loadFriendRequests(); },
-    messages: loadConversations,
+    friends: () => { if(typeof loadFriends==='function') loadFriends(); if(typeof loadFriendRequests==='function') loadFriendRequests(); },
+    messages: () => { if(typeof loadConversations==='function') loadConversations(); },
     profile: loadProfile,
     music: () => { if (typeof loadMusic === 'function') loadMusic(); },
   };
@@ -108,6 +108,30 @@ $('#settings-close-btn')?.addEventListener('click', () => {
 
 $('#settings-modal')?.addEventListener('click', e => {
   if (e.target.id === 'settings-modal') $('#settings-modal').style.display = 'none';
+});
+
+// Закрытие всех модалок по Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    // Настройки
+    const settingsModal = $('#settings-modal');
+    if (settingsModal && settingsModal.style.display === 'flex') {
+      settingsModal.style.display = 'none';
+      return;
+    }
+    // Редактирование профиля
+    const editProfileModal = $('#edit-profile-modal');
+    if (editProfileModal && editProfileModal.style.display === 'flex') {
+      editProfileModal.style.display = 'none';
+      return;
+    }
+    // Аватар
+    const avatarModal = $('#avatar-modal');
+    if (avatarModal && avatarModal.style.display === 'flex') {
+      avatarModal.style.display = 'none';
+      return;
+    }
+  }
 });
 
 // Табы

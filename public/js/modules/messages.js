@@ -1,811 +1,614 @@
 /**
- * Сообщения и мессенджер
+ * Мессенджер — современный UI
  */
-
-// Состояние пагинации сообщений
 let messagesCursor = null;
+let pendingFiles = [];
+let socketAttached = false;
+let replyTo = null;
+let editingMsgId = null;
 
-// Кэш публичных E2E ключей: userId -> base64 publicKey
-const e2ePublicKeyCache = new Map();
-
-/**
- * Получает публичный E2E ключ пользователя (с кэшем)
- * @param {number} userId
- * @returns {Promise<CryptoKey|null>}
- */
-async function getUserE2EKey(userId) {
-  // Не кэшируем — всегда запрашиваем свежий ключ с сервера
+// ===== E2E =====
+async function getPubKey(uid) {
   try {
-    const user = await api(`/api/users/${userId}`);
-    if (user.e2e_public_key) {
-      return E2E.importPublicKey(user.e2e_public_key);
-    }
-    return null;
-  } catch {
-    return null;
-  }
+    const u = await api(`/api/users/${uid}`);
+    return u.e2e_public_key ? E2E.importPublicKey(u.e2e_public_key) : null;
+  } catch { return null; }
 }
 
-/**
- * Шифрует сообщение E2E
- * @param {string} content
- * @param {number} receiverId
- * @returns {Promise<{content: string, type: string, fileUrl: string}>}
- */
-async function encryptMessageForUser(content, receiverId) {
-  const pubKey = await getUserE2EKey(receiverId);
-  if (!pubKey) {
-    // У получателя нет E2E ключа — отправляем как есть (fallback)
-    return { content, type: 'text', fileUrl: '' };
-  }
-  const encrypted = await E2E.encryptMessage(content, pubKey);
-  return { content: encrypted, type: 'e2e', fileUrl: '' };
+async function encryptMsg(text, uid) {
+  if (uid == window.currentUserId) return { content: text, type: 'text' };
+  const key = await getPubKey(uid);
+  if (!key) return { content: text, type: 'text' };
+  return { content: await E2E.encryptMessage(text, key), type: 'e2e' };
 }
 
-/**
- * Расшифровывает сообщение если это E2E
- * @param {string} content
- * @param {string} type
- * @returns {Promise<string>}
- */
-async function tryDecryptMessage(content, type) {
-  if (type !== 'e2e' && !E2E.isEncrypted(content)) return content;
-  try {
-    return await E2E.decryptMessage(content);
-  } catch (e) {
-    // Не спамим в консоль — это нормально при смене ключей
-    return '🔒 [Не удалось расшифровать — ключи были изменены]';
-  }
+async function decryptMsg(content, type) {
+  if (type !== 'e2e' || !E2E.isEncrypted(content)) return content;
+  try { return await E2E.decryptMessage(content); }
+  catch { return '[Ошибка расшифровки]'; }
 }
 
-// ======================== СТАТУС ПОЛЬЗОВАТЕЛЯ ========================
-
-async function updateChatStatus(userId) {
-  try {
-    const user = await api(`/api/users/${userId}`);
-    const statusEl = $('.online-indicator');
-    if (!statusEl) return;
-    if (user.status === 'online') {
-      statusEl.innerHTML = '<span class="online-dot"></span>Онлайн';
-      statusEl.style.color = 'var(--success)';
-    } else {
-      statusEl.innerHTML = '<span class="online-dot offline"></span>Не в сети';
-      statusEl.style.color = 'var(--text-muted)';
-    }
-  } catch (e) { console.error('updateChatStatus:', e); }
+// ===== УТИЛИТЫ =====
+function timeStr(d) {
+  const dt = new Date(d);
+  const t = `${dt.getHours().toString().padStart(2,'0')}:${dt.getMinutes().toString().padStart(2,'0')}`;
+  return t;
 }
 
-// Слушаем события смены статуса
-socket.on('user_status', ({ userId, status }) => {
-  // Обновляем статус в чате
-  if (userId == state.chatUserId) {
-    const statusEl = $('.online-indicator');
-    if (!statusEl) return;
-    if (status === 'online') {
-      statusEl.innerHTML = '<span class="online-dot"></span>Онлайн';
-      statusEl.style.color = 'var(--success)';
-    } else {
-      statusEl.innerHTML = '<span class="online-dot offline"></span>Не в сети';
-      statusEl.style.color = 'var(--text-muted)';
-    }
-  }
-  // Обновляем статус в карточках пользователей (Главная/Люди)
-  document.querySelectorAll('.user-card-modern').forEach(card => {
-    const avatarLink = card.querySelector('.user-card-avatar-link');
-    if (avatarLink?.dataset.username === userId) {
-      const statusEl = card.querySelector('.user-card-status');
-      if (statusEl) {
-        statusEl.innerHTML = status === 'online'
-          ? '<span class="status-dot"></span>Онлайн'
-          : '<span class="status-dot offline"></span>Не в сети';
-      }
-    }
+function dateGroup(d) {
+  const dt = new Date(d);
+  const now = new Date();
+  const diff = now - dt;
+  if (diff < 86400000 && dt.getDate() === now.getDate()) return 'Сегодня';
+  const yes = new Date(now); yes.setDate(yes.getDate()-1);
+  if (dt.getDate() === yes.getDate() && dt.getMonth() === yes.getMonth()) return 'Вчера';
+  return dt.toLocaleDateString('ru-RU', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+}
+
+// ===== SOCKET =====
+function attachSocket() {
+  if (socketAttached) return;
+  socketAttached = true;
+  
+  socket.on('user_status', ({userId, status}) => {
+    if (userId == state.chatUserId) updateStatus(userId);
   });
-});
+  socket.on('new_message', async msg => {
+    if (msg.sender_id != state.chatUserId) return;
+    const c = $('#chat-messages');
+    c?.querySelector('.empty-state')?.remove();
+    c.insertAdjacentHTML('beforeend', await bubble(msg));
+    c.scrollTop = c.scrollHeight;
+    loadConversations();
+    loadMessagesCount();
+  });
+  socket.on('message_sent', async msg => {
+    const c = $('#chat-messages');
+    c?.querySelector('.empty-state')?.remove();
+    c.insertAdjacentHTML('beforeend', await bubble(msg));
+    c.scrollTop = c.scrollHeight;
+    loadConversations();
+    loadMessagesCount();
+  });
+  socket.on('chat_deleted', data => {
+    if (state.chatUserId === data.userId) {
+      state.chatUserId = null;
+      $('#chat-active').style.display = 'none';
+      $('#chat-empty').style.display = 'flex';
+      notify('Переписка удалена', 'info');
+    }
+    loadConversations();
+  });
+  socket.on('user_typing', d => {
+    if (d.fromUserId != state.chatUserId) return;
+    const el = $('#chat-status');
+    if (el) el.innerHTML = '<span class="online-dot" style="background:#f59e0b"></span> Печатает...';
+  });
+  socket.on('user_stop_typing', d => {
+    if (d.fromUserId != state.chatUserId) return;
+    updateStatus(state.chatUserId);
+  });
+}
 
-// ======================== ДИАЛОГИ ========================
-
-async function loadConversations() {
+// ===== ДИАЛОГИ =====
+window.loadConversations = async function() {
+  const c = $('#conversations-list');
+  if (!c) return;
   try {
-    resetChatView();
     const convs = await api('/api/conversations');
-    const c = $('#conversations-list');
     if (!convs.length) {
-      c.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><p>Нет диалогов</p></div>';
+      c.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><p>Нет диалогов</p></div>`;
       return;
     }
     c.innerHTML = convs.map(f => {
-      const last = f.last_message ? (f.last_message.length > 40 ? f.last_message.substring(0, 40) + '...' : f.last_message) : 'Нет сообщений';
-      const time = f.last_message_at ? parseUTC(f.last_message_at).toLocaleTimeString('ru', MOSCOW_CLOCK) : '';
-      const fromMe = f.last_sender_id == userId;
-      const activeClass = f.id == state.chatUserId ? ' active' : '';
-      return `<div class="conversation-item-modern${activeClass}" data-chat-id="${f.id}" data-chat-name="${esc(f.display_name || f.username)}" data-chat-avatar="${esc(f.avatar || '')}" data-chat-username="${esc(f.username)}"><div class="conversation-avatar-wrapper">${avatarHTML(f, 'conversation')}</div><div class="conversation-info"><div class="conversation-item-top"><a href="/${esc(f.username)}" class="conversation-item-name post-author-link" data-username="${esc(f.username)}">${esc(f.display_name || f.username)}</a>${time ? `<div class="conversation-time">${time}</div>` : ''}</div><div class="conversation-item-bottom"><div class="last-message-text ${fromMe ? 'sent' : ''}">${fromMe ? 'Вы: ' : ''}${esc(last)}</div>${f.unread_count > 0 ? `<div class="unread-badge">${f.unread_count}</div>` : ''}</div></div></div>`;
+      const last = f.last_message ? (f.last_message.length>50?f.last_message.substring(0,50)+'...':f.last_message) : 'Нет сообщений';
+      const fromMe = f.last_sender == userId;
+      return `<div class="conv-item${f.id==state.chatUserId?' active':''}" data-chat-id="${f.id}" data-chat-name="${esc(f.display_name||f.username)}" data-chat-avatar="${esc(f.avatar||'')}" data-chat-username="${esc(f.username)}">
+        <a href="/${esc(f.username)}" class="conv-avatar">${avatarHTML(f,'conversation')}</a>
+        <div class="conv-info">
+          <div class="conv-top">
+            <a href="/${esc(f.username)}" class="conv-name">${esc(f.display_name||f.username)}</a>
+            ${f.unread_count>0?`<div class="conv-badge">${f.unread_count}</div>`:''}
+          </div>
+          <div class="conv-bottom">
+            <div class="conv-last ${fromMe?'sent':''}">${fromMe?'Вы: ':''}${esc(last)}</div>
+          </div>
+        </div>
+      </div>`;
     }).join('');
-  } catch (e) { console.error('loadConversations:', e); }
-}
+  } catch(e) { console.error(e); }
+};
 
-// ======================== ОТКРЫТИЕ ЧАТА ========================
+// ===== ОТКРЫТИЕ ЧАТА =====
+window.openChat = async function(id, name, avatar, username) {
+  state.chatUserId = id;
+  attachSocket();
 
-// Сброс chat-open при загрузке страницы сообщений
-function resetChatView() {
-  document.querySelector('.messenger-layout')?.classList.remove('chat-open');
-}
-
-window.openChat = async function(fId, fName, fAvatar, fUsername = '') {
-  state.chatUserId = fId;
-
-  // Переключаем на страницу сообщений
   $$('.nav-link').forEach(l => l.classList.remove('active'));
-  const msgLink = $('[data-page="messages"]');
-  if (msgLink) msgLink.classList.add('active');
-
+  $('[data-page="messages"]')?.classList.add('active');
   $$('.page').forEach(p => p.classList.remove('active'));
-  const msgPage = $('#messages-page');
-  if (msgPage) msgPage.classList.add('active');
-  history.pushState({ page: 'messages' }, '', '/messages');
+  $('#messages-page')?.classList.add('active');
+  history.pushState({page:'messages'}, '', '/messages');
 
-  // Показываем чат
-  const chatEmpty = $('#chat-empty');
-  const chatActive = $('#chat-active');
-  if (chatEmpty) chatEmpty.style.display = 'none';
-  if (chatActive) chatActive.style.display = 'flex';
-
-  // Мобильный: переключаем на экран чата
-  const isMobile = window.innerWidth <= 768;
-  const messengerLayout = document.querySelector('.messenger-layout');
-  if (messengerLayout) {
-    if (isMobile) {
-      messengerLayout.classList.add('chat-open');
-    } else {
-      messengerLayout.classList.remove('chat-open');
-    }
-  }
+  $('#chat-empty').style.display = 'none';
+  $('#chat-active').style.display = 'flex';
+  document.querySelector('.messenger-layout')?.classList.toggle('chat-open', window.innerWidth<=768);
 
   const el = $('#chat-username');
-  if (fUsername) el.innerHTML = `<a href="/${esc(fUsername)}" class="chat-user-link post-author-link" data-username="${esc(fUsername)}">${esc(fName)}</a>`;
-  else el.textContent = fName;
+  if (username) el.innerHTML = `<a href="/${esc(username)}" class="chat-user-link">${esc(name)}</a>`;
+  else el.textContent = name;
 
-  // Обновляем статус
-  updateChatStatus(fId);
-
-  if (fAvatar) {
-    $('#chat-avatar').src = fAvatar; $('#chat-avatar').style.display = 'block'; $('#chat-avatar-placeholder').style.display = 'none';
+  if (avatar) {
+    $('#chat-avatar').src = avatar; $('#chat-avatar').style.display = 'block';
+    $('#chat-avatar-placeholder').style.display = 'none';
   } else {
-    $('#chat-avatar').style.display = 'none'; $('#chat-avatar-placeholder').style.display = 'flex';
+    $('#chat-avatar').style.display = 'none';
+    $('#chat-avatar-placeholder').style.display = 'flex';
   }
 
+  updateStatus(id);
   await loadConversations();
-  $$('.conversation-item-modern').forEach(i => { i.classList.toggle('active', i.dataset.chatId == fId); });
-  messagesCursor = null; // сброс курсора при открытии нового чата
-  await loadMessages(fId);
-  // После загрузки сообщений сервер уже пометил их прочитанными — обновляем счётчик
-  setTimeout(async () => {
-    await loadMessagesCount();
-    await loadConversations();
-  }, 300);
+  messagesCursor = null;
+  await loadMessages(id);
+  setTimeout(() => { markRead(id); loadMessagesCount(); }, 300);
+};
+
+async function updateStatus(uid) {
+  try {
+    const u = await api(`/api/users/${uid}`);
+    const el = $('#chat-status');
+    if (!el) return;
+    if (u.status==='online') { el.innerHTML='<span class="online-dot"></span>Онлайн'; el.style.color='var(--success)'; }
+    else { el.innerHTML='<span class="online-dot offline"></span>Не в сети'; el.style.color='var(--text-muted)'; }
+  } catch {}
 }
 
-// ======================== СООБЩЕНИЯ ========================
+async function markRead(uid) { try { await api(`/api/messages/read/${uid}`, {method:'PUT'}); } catch {} }
 
-async function loadMessages(fid, prepend = false) {
+// ===== СООБЩЕНИЯ =====
+window.loadMessages = async function(fid, prepend=false) {
   try {
-    const url = messagesCursor
-      ? `/api/messages/${fid}?cursor=${messagesCursor}`
-      : `/api/messages/${fid}`;
+    const url = messagesCursor ? `/api/messages/${fid}?cursor=${messagesCursor}` : `/api/messages/${fid}`;
     const data = await api(url);
     const msgs = data.messages || [];
     messagesCursor = data.nextCursor || null;
-
     const c = $('#chat-messages');
+    if (!c) return;
 
     if (!prepend) {
       c.innerHTML = '';
-      if (msgs.length === 0) {
-        c.innerHTML = '<div class="empty-state"><p>Нет сообщений</p></div>';
-        return;
+      if (!msgs.length) { c.innerHTML = '<div class="empty-state"><p>Нет сообщений</p></div>'; return; }
+      
+      // Группировка по дате
+      let lastDate = '';
+      for (const m of msgs) {
+        const dg = dateGroup(m.created_at);
+        if (dg !== lastDate) {
+          c.insertAdjacentHTML('beforeend', `<div class="date-divider">${dg}</div>`);
+          lastDate = dg;
+        }
+        c.insertAdjacentHTML('beforeend', await bubble(m));
       }
-      // E2E расшифровка — ждём все promises
-      const bubbles = await Promise.all(msgs.map(renderMessageBubble));
-      c.innerHTML = bubbles.join('');
     } else {
-      if (msgs.length === 0) {
-        const loadMoreBtn = c.querySelector('.load-more-messages');
-        if (loadMoreBtn) loadMoreBtn.remove();
-        return;
+      if (!msgs.length) { c.querySelector('.load-more')?.remove(); return; }
+      const oldH = c.scrollHeight;
+      let lastDate = '';
+      for (const m of [...msgs].reverse()) {
+        const dg = dateGroup(m.created_at);
+        if (dg !== lastDate) {
+          c.insertAdjacentHTML('afterbegin', `<div class="date-divider">${dg}</div>`);
+          lastDate = dg;
+        }
+        c.insertAdjacentHTML('afterbegin', await bubble(m));
       }
-      const bubbles = await Promise.all(msgs.map(renderMessageBubble));
-      c.insertAdjacentHTML('afterbegin', bubbles.join(''));
-
-      // Удаляем кнопку "загрузить ещё" если её не нужно показывать
-      if (!data.hasMore) {
-        const loadMoreBtn = c.querySelector('.load-more-messages');
-        if (loadMoreBtn) loadMoreBtn.remove();
-      }
+      c.scrollTop = c.scrollHeight - oldH;
+      if (!data.hasMore) c.querySelector('.load-more')?.remove();
     }
-
-    // Добавляем кнопку "загрузить ещё" если есть старые сообщения
-    if (data.hasMore && !prepend) {
-      c.insertAdjacentHTML('afterbegin', '<div class="load-more-wrap"><button class="load-more-messages" data-fid="' + fid + '">Загрузить старые сообщения</button></div>');
-    }
-
-    // Скролл вниз
-    c.scrollTop = c.scrollHeight;
-
-    // Init audio для новых элементов
-    c.querySelectorAll('.audio-player').forEach(player => initAudioDuration(player));
-  } catch (e) { console.error('[messages] loadMessages:', e); }
-}
-
-/**
- * Добавляет одно сообщение в DOM
- * @param {Object} m — сообщение
- * @param {string} cls — CSS класс ('sent' или 'received')
- */
-async function appendMessageBubble(m, cls) {
-  const c = $('#chat-messages');
-  if (!c) return;
-
-  const html = await renderMessageBubble(m);
-  // renderMessageBubble уже возвращает полный <div class="message-bubble ...">
-  c.insertAdjacentHTML('beforeend', html);
-
-  const lastBubble = c.lastElementChild;
-  if (!lastBubble) return;
-
-  const player = lastBubble.querySelector('.audio-player');
-  if (player) initAudioDuration(player);
-  lastBubble.scrollIntoView({ behavior: 'smooth', block: 'end' });
-}
-
-/**
- * Рендерит HTML одного сообщения (bubble)
- */
-window.renderMessageBubble = async function(m) {
-  const isSent = m.sender_id == userId;
-  const t = parseUTC(m.created_at).toLocaleTimeString('ru', MOSCOW_CLOCK);
-  const safeUrl = sanitizeUrl(m.file_url);
-
-  // E2E расшифровка
-  let displayContent = m.content;
-  if (m.type === 'e2e') {
-    displayContent = await tryDecryptMessage(m.content, m.type);
-  }
-
-  let fileHTML = '';
-  if (m.file_url) {
-    // Извлекаем оригинальное имя файла
-    let fileName = '';
-    if (m.file_name) fileName = m.file_name;
-    else if (m.content && !E2E.isEncrypted(m.content) && m.content.length < 100) fileName = m.content;
-    else if (m.file_url) fileName = m.file_url.split('/').pop().replace(/^[a-f0-9-]+\./, '');
-
-    const safeUrl = sanitizeUrl(m.file_url);
-    if (m.type === 'image') {
-      fileHTML = `<div class="msg-file"><img src="${safeUrl}" class="msg-image" data-action="view-media" data-url="${m.file_url}" data-type="image">${fileName ? `<div class="msg-file-name">${esc(fileName)}</div>` : ''}</div>`;
-    } else if (m.type === 'audio') {
-      let audioName = fileName;
-      if (!audioName && m.file_url) audioName = m.file_url.split('/').pop().replace(/^[a-f0-9-]+-/, '').replace(/\.[^.]+$/, '');
-      fileHTML = `<div class="msg-file"><div class="audio-player" data-src="${safeUrl}" data-name="${esc(audioName)}"><div class="audio-play-btn" data-action="toggle-audio"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div><div class="audio-info"><div class="audio-name">${esc(audioName)}</div><div class="audio-controls"><div class="audio-progress-wrap" data-action="seek-audio"><div class="audio-progress-bar"><div class="audio-progress-fill" style="width:0%"></div></div></div><div class="audio-time"><span class="cur">0:00</span><span class="tot"></span></div></div></div><audio src="${safeUrl}" preload="metadata"></audio></div></div>`;
-    } else if (m.type === 'video') {
-      fileHTML = `<div class="msg-file"><video controls class="msg-video" src="${safeUrl}"></video></div>`;
-    } else if (m.type === 'file') {
-      const displayName = fileName || 'Файл';
-      fileHTML = `<div class="msg-file"><a href="${safeUrl}" class="msg-file-link" download>📎 ${esc(displayName)}</a></div>`;
-    } else {
-      // Комбинированное сообщение: текст + файл (тип 'text' но есть file_url)
-      // Определяем тип файла по расширению
-      const ext = (m.file_url.split('.').pop() || '').toLowerCase();
-      if (/\.(jpg|jpeg|png|gif|webp)$/.test(ext)) {
-        fileHTML = `<div class="msg-file"><img src="${safeUrl}" class="msg-image" data-action="view-media" data-url="${m.file_url}" data-type="image">${fileName ? `<div class="msg-file-name">${esc(fileName)}</div>` : ''}</div>`;
-      } else if (/\.(mp3|wav|ogg|flac|m4a|aac)$/.test(ext)) {
-        let audioName = fileName || m.file_url.split('/').pop().replace(/\.[^.]+$/, '');
-        fileHTML = `<div class="msg-file"><div class="audio-player" data-src="${safeUrl}" data-name="${esc(audioName)}"><div class="audio-play-btn" data-action="toggle-audio"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div><div class="audio-info"><div class="audio-name">${esc(audioName)}</div><div class="audio-controls"><div class="audio-progress-wrap" data-action="seek-audio"><div class="audio-progress-bar"><div class="audio-progress-fill" style="width:0%"></div></div></div><div class="audio-time"><span class="cur">0:00</span><span class="tot"></span></div></div></div><audio src="${safeUrl}" preload="metadata"></audio></div></div>`;
-      } else if (/\.(mp4|webm|mkv|avi)$/.test(ext)) {
-        fileHTML = `<div class="msg-file"><video controls class="msg-video" src="${safeUrl}"></video></div>`;
-      } else {
-        const displayName = fileName || 'Файл';
-        fileHTML = `<div class="msg-file"><a href="${safeUrl}" class="msg-file-link" download>📎 ${esc(displayName)}</a></div>`;
-      }
-    }
-  }
-
-  // Текст показываем даже если есть файл (комбинированное сообщение)
-  const hasText = m.type === 'text' || (m.type === 'e2e' && displayContent && !E2E.isEncrypted(displayContent));
-  const text = hasText ? `<div class="msg-text-content">${esc(displayContent)}</div>` : '';
-
-  return `<div class="message-bubble ${isSent ? 'sent' : 'received'}">${text}${fileHTML}<div class="message-time">${t}</div></div>`;
+    if (data.hasMore && !prepend) c.insertAdjacentHTML('afterbegin', `<div class="load-more-wrap"><button class="load-more" data-fid="${fid}">Загрузить старые</button></div>`);
+    if (!prepend) c.scrollTop = c.scrollHeight;
+    c.querySelectorAll('.audio-player').forEach(initAudio);
+  } catch(e) { console.error(e); }
 };
 
-/**
- * Загружает старые сообщения (курсорная пагинация)
- */
-window.loadOlderMessages = async function(fid) {
-  if (!messagesCursor) return;
-  const c = $('#chat-messages');
-  const btn = c.querySelector('.load-more-messages');
-  if (btn) {
-    btn.textContent = 'Загрузка...';
-    btn.disabled = true;
+async function bubble(m) {
+  const sent = m.sender_id == userId;
+  let text = m.is_deleted ? '<em>Сообщение удалено</em>' : await decryptMsg(m.content, m.type);
+  let media = '';
+  
+  if (m.file_url && !m.is_deleted) {
+    const ext = m.file_url.split('.').pop().toLowerCase();
+    const name = m.file_name || m.file_url.split('/').pop();
+    if (m.type==='image' || /\.(jpg|jpeg|png|gif|webp)$/.test(ext)) {
+      media = `<div class="msg-media"><img src="${esc(m.thumb_url||m.file_url)}" data-action="view-media" data-url="${esc(m.file_url)}" data-type="image" loading="lazy"></div>`;
+    } else if (m.type==='audio' || /\.(mp3|wav|ogg)$/.test(ext)) {
+      media = `<div class="msg-media"><div class="audio-player" data-src="${esc(m.file_url)}">
+        <button class="audio-play-btn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+        <div class="audio-info"><div class="audio-name">${esc(name.replace(/\.[^.]+$/,''))}</div>
+        <div class="audio-progress" data-action="seek-audio"><div class="audio-bar"><div class="audio-fill"></div></div></div>
+        <div class="audio-time"><span class="cur">0:00</span> <span class="tot"></span></div></div>
+        <audio src="${esc(m.file_url)}" preload="metadata"></audio>
+      </div></div>`;
+    } else if (m.type==='video' || /\.(mp4|webm)$/.test(ext)) {
+      media = `<div class="msg-media"><video controls src="${esc(m.file_url)}" class="msg-video" preload="metadata"></video></div>`;
+    } else {
+      media = `<div class="msg-media"><a href="${esc(m.file_url)}" class="msg-file-link" download>📎 ${esc(name)}</a></div>`;
+    }
   }
-  await loadMessages(fid, true);
+
+  // Reply
+  let replyHTML = '';
+  if (m.reply_to && m.reply_content) {
+    replyHTML = `<div class="msg-reply"><span>↪ Ответ</span> ${esc(m.reply_content.substring(0,80))}${m.reply_content.length>80?'...':''}</div>`;
+  }
+
+  const editMark = m.edited_at ? ' (ред.)' : '';
+  const txt = text ? `<div class="msg-text">${esc(text)}${editMark}</div>` : '';
+  const status = sent && !m.is_deleted ? `<span class="msg-status">${m.is_read?'✓✓':'✓'}</span>` : '';
+
+  // Контекстное меню
+  const ctxMenu = sent && !m.is_deleted ? `<div class="msg-actions">
+    <button class="msg-action-btn" data-action="reply" data-msg-id="${m.id}" title="Ответить">↩️</button>
+    <button class="msg-action-btn" data-action="edit" data-msg-id="${m.id}" title="Редактировать">✏️</button>
+    <button class="msg-action-btn" data-action="delete" data-msg-id="${m.id}" title="Удалить">🗑️</button>
+  </div>` : '';
+
+  return `<div class="msg ${sent?'sent':'recv'}" data-msg-id="${m.id}" data-msg-type="${m.type}">${replyHTML}${txt}${media}<div class="msg-meta"><span>${timeStr(m.created_at)}</span>${status}</div>${ctxMenu}</div>`;
 }
 
-// ======================== МЕДИА ========================
+window.loadOlderMessages = async function(fid) {
+  const btn = $('#chat-messages .load-more');
+  if (btn) { btn.textContent='Загрузка...'; btn.disabled=true; }
+  await loadMessages(fid, true);
+};
 
-// Audio Player
-window.initAudioDuration = function(player) {
-  const audio = player?.querySelector('audio');
-  const totEl = player?.querySelector('.tot');
-  if (!audio || !totEl) return;
-  if (audio.duration && !isNaN(audio.duration) && !totEl.textContent) {
-    const m = Math.floor(audio.duration / 60), s = Math.floor(audio.duration % 60);
-    totEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
-    return;
-  }
-  const handler = () => {
-    if (audio.duration && !isNaN(audio.duration) && !totEl.textContent) {
-      const m = Math.floor(audio.duration / 60), s = Math.floor(audio.duration % 60);
-      totEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
-      audio.removeEventListener('loadedmetadata', handler);
+// ===== АУДИО =====
+function initAudio(el) {
+  const audio = el.querySelector('audio');
+  const btn = el.querySelector('.audio-play-btn');
+  const fill = el.querySelector('.audio-fill');
+  const cur = el.querySelector('.cur');
+  const tot = el.querySelector('.tot');
+  if (!audio || !btn) return;
+
+  audio.addEventListener('loadedmetadata', () => {
+    if (tot && audio.duration && !tot.textContent) {
+      const m=Math.floor(audio.duration/60), s=Math.floor(audio.duration%60);
+      tot.textContent = `${m}:${s.toString().padStart(2,'0')}`;
+    }
+  });
+
+  btn.onclick = () => {
+    if (audio.paused) {
+      document.querySelectorAll('.audio-player audio').forEach(a => { if(a!==audio) a.pause(); });
+      audio.play();
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+      const tick = () => {
+        if (audio.paused || audio.ended) {
+          btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+          fill.style.width='0%'; cur.textContent='0:00'; return;
+        }
+        fill.style.width = (audio.currentTime/audio.duration*100)+'%';
+        const m=Math.floor(audio.currentTime/60), s=Math.floor(audio.currentTime%60);
+        cur.textContent = `${m}:${s.toString().padStart(2,'0')}`;
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    } else {
+      audio.pause();
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
     }
   };
-  audio.addEventListener('loadedmetadata', handler);
-  audio.addEventListener('durationchange', handler);
-  audio.load();
-};
 
-window.toggleAudio = function(btn) {
-  const player = btn.closest('.audio-player');
-  const audio = player?.querySelector('audio');
-  const fill = player?.querySelector('.audio-progress-fill');
-  const curEl = player?.querySelector('.cur');
-  if (!audio || !fill || !curEl) return;
+  el.querySelector('[data-action="seek-audio"]')?.addEventListener('click', e => {
+    if (!audio.duration) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    audio.currentTime = Math.max(0, Math.min(1, (e.clientX-r.left)/r.width)) * audio.duration;
+  });
+}
 
-  if (audio.duration && !isNaN(audio.duration) && !player.querySelector('.tot').textContent) {
-    const m = Math.floor(audio.duration / 60), s = Math.floor(audio.duration % 60);
-    player.querySelector('.tot').textContent = m + ':' + (s < 10 ? '0' : '') + s;
-  }
-
-  if (audio.paused) {
-    document.querySelectorAll('.audio-player audio').forEach(a => {
-      if (a !== audio) { a.pause(); a.closest('.audio-player').querySelector('.audio-play-btn svg').innerHTML = '<path d="M8 5v14l11-7z"/>'; }
-    });
-    audio.play();
-    btn.querySelector('svg').innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
-    const update = () => {
-      if (audio.paused || audio.ended) {
-        btn.querySelector('svg').innerHTML = '<path d="M8 5v14l11-7z"/>';
-        fill.style.width = '0%'; curEl.textContent = '0:00'; return;
-      }
-      fill.style.width = (audio.currentTime / audio.duration) * 100 + '%';
-      const m = Math.floor(audio.currentTime / 60), s = Math.floor(audio.currentTime % 60);
-      curEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
-      requestAnimationFrame(update);
-    };
-    requestAnimationFrame(update);
-  } else {
-    audio.pause();
-    btn.querySelector('svg').innerHTML = '<path d="M8 5v14l11-7z"/>';
-  }
-};
-
-window.seekAudio = function(e, wrap) {
-  const audio = wrap.closest('.audio-player')?.querySelector('audio');
-  if (!audio?.duration || isNaN(audio.duration)) return;
-  const rect = wrap.getBoundingClientRect();
-  audio.currentTime = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * audio.duration;
-};
-
-// Media Viewer
+// ===== МЕДИА =====
 window.openMediaViewer = function(url, type) {
-  const safeUrl = sanitizeUrl(url);
-  if (!safeUrl) return;
-
-  let viewer = $('#media-viewer');
-  if (!viewer) {
-    viewer = document.createElement('div');
-    viewer.id = 'media-viewer'; viewer.className = 'media-viewer';
-    viewer.innerHTML = '<div class="media-viewer-overlay" data-action="close-media-viewer"></div><div class="media-viewer-content"><button class="media-viewer-close" data-action="close-media-viewer">✕</button><div class="media-viewer-body"></div></div>';
-    document.body.appendChild(viewer);
+  let v = $('#media-viewer');
+  if (!v) {
+    v = document.createElement('div'); v.id='media-viewer'; v.className='media-viewer';
+    v.innerHTML = '<div class="media-viewer-overlay" data-action="close-media-viewer"></div><div class="media-viewer-content"><button class="media-viewer-close" data-action="close-media-viewer">✕</button><div class="media-viewer-body"></div></div>';
+    document.body.appendChild(v);
   }
-
-  const body = viewer.querySelector('.media-viewer-body');
-  if (type === 'image') {
-    body.innerHTML = `<div class="img-zoom-wrap"><img src="${safeUrl}" class="media-viewer-img" draggable="false"></div>`;
-    const wrap = body.querySelector('.img-zoom-wrap');
-    const img = body.querySelector('.media-viewer-img');
-    let scale = 1, tx = 0, ty = 0;
-    let isDragging = false, dragStartX, dragStartY, startTx, startTy;
-
-    const apply = () => { img.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; img.style.cursor = scale > 1 ? 'grab' : 'default'; };
-
-    wrap.addEventListener('wheel', e => {
-      e.preventDefault();
-      const rect = wrap.getBoundingClientRect();
-      const mx = e.clientX - rect.left - rect.width / 2;
-      const my = e.clientY - rect.top - rect.height / 2;
-      const newScale = Math.max(1, Math.min(5, scale - e.deltaY * 0.002));
-      if (newScale === scale) return;
-      const ratio = newScale / scale;
-      tx = mx - (mx - tx) * ratio;
-      ty = my - (my - ty) * ratio;
-      scale = newScale;
-      // Центрируем при зуме 1
-      if (scale <= 1) { scale = 1; tx = 0; ty = 0; }
-      img.style.transition = 'transform 0.15s ease';
-      apply();
-    }, { passive: false });
-
-    wrap.addEventListener('mousedown', e => {
-      if (scale <= 1 || e.button !== 0) return;
-      isDragging = true; dragStartX = e.clientX; dragStartY = e.clientY; startTx = tx; startTy = ty;
-      img.style.cursor = 'grabbing'; img.style.transition = 'none'; e.preventDefault();
-    });
-    window.addEventListener('mousemove', e => { if (!isDragging) return; tx = startTx + (e.clientX - dragStartX); ty = startTy + (e.clientY - dragStartY); apply(); });
-    window.addEventListener('mouseup', () => { if (!isDragging) return; isDragging = false; img.style.cursor = 'grab'; img.style.transition = 'transform 0.15s ease'; });
-  } else if (type === 'video') {
-    body.innerHTML = `<video controls autoplay class="media-viewer-video" src="${safeUrl}"></video>`;
-  } else {
-    body.innerHTML = `<div class="media-viewer-audio-wrap"><audio controls autoplay src="${safeUrl}"></audio></div>`;
-  }
-  viewer.style.display = 'flex';
-  document.body.style.overflow = 'hidden';
+  const body = v.querySelector('.media-viewer-body');
+  if (type==='image') body.innerHTML = `<img src="${esc(url)}" class="media-viewer-img">`;
+  else if (type==='video') body.innerHTML = `<video controls autoplay src="${esc(url)}" class="media-viewer-video">`;
+  v.style.display='flex'; document.body.style.overflow='hidden';
 };
 
 window.closeMediaViewer = function() {
   const v = $('#media-viewer');
-  if (v) { v.style.display = 'none'; const b = v.querySelector('.media-viewer-body'); if (b) b.innerHTML = ''; }
+  if (v) { v.style.display='none'; const b=v.querySelector('.media-viewer-body'); if(b) b.innerHTML=''; }
   document.body.style.overflow = '';
 };
 
-// Закрытие по клику на фон вьюера
-document.addEventListener('click', e => {
-  const viewer = document.getElementById('media-viewer');
-  if (!viewer || viewer.style.display === 'none') return;
-  // Закрываем если клик НЕ по содержимому (картинка/видео/аудио) и НЕ по кнопке закрытия
-  const body = viewer.querySelector('.media-viewer-body');
-  const closeBtn = viewer.querySelector('.media-viewer-close');
-  if ((body && !body.contains(e.target)) && !(closeBtn && closeBtn.contains(e.target))) {
-    closeMediaViewer();
+// ===== ОТПРАВКА =====
+async function sendFile(file) {
+  const fd = new FormData(); fd.append('file', file);
+  const res = await fetch('/api/messages/upload', { method:'POST', credentials:'include', body:fd });
+  if (!res.ok) { const e=await res.json(); throw new Error(e.error); }
+  return res.json();
+}
+
+async function sendMessage() {
+  const input = $('#message-input');
+  const text = input?.value.trim();
+  if (!text && !pendingFiles.length && !replyTo) return;
+  if (!state.chatUserId) return;
+
+  const files = [...pendingFiles];
+  pendingFiles = [];
+  updateFilePreview();
+  if (input) input.value = '';
+  clearReply();
+
+  // Удаляем inline editing если есть
+  const editBar = $('#edit-bar');
+  if (editBar) editBar.remove();
+  editingMsgId = null;
+
+  try {
+    // Загружаем файлы параллельно
+    const uploads = await Promise.all(files.map(f => sendFile(f)));
+    
+    if (uploads.length === 1 && text) {
+      // Один файл + текст
+      const up = uploads[0];
+      const c = $('#chat-messages');
+      c?.querySelector('.empty-state')?.remove();
+      const temp = { id:Date.now(), sender_id:userId, content:text, type:up.type, file_url:up.fileUrl, file_name:up.fileName, thumb_url:up.thumbUrl, reply_to:replyTo, is_read:0, created_at:new Date().toISOString() };
+      c.insertAdjacentHTML('beforeend', await bubble(temp));
+      c.scrollTop = c.scrollHeight;
+
+      await api('/api/messages', {
+        method:'POST',
+        body: JSON.stringify({ receiverId:state.chatUserId, content:text, type:up.type, fileUrl:up.fileUrl, fileName:up.fileName, thumbUrl:up.thumbUrl, replyTo })
+      });
+    } else if (uploads.length > 0) {
+      // Несколько файлов
+      for (const up of uploads) {
+        const c = $('#chat-messages');
+        c?.querySelector('.empty-state')?.remove();
+        const temp = { id:Date.now()+Math.random(), sender_id:userId, content:uploads.indexOf(up)===0?text:'', type:up.type, file_url:up.fileUrl, file_name:up.fileName, thumb_url:up.thumbUrl, reply_to:uploads.indexOf(up)===0?replyTo:null, is_read:0, created_at:new Date().toISOString() };
+        c.insertAdjacentHTML('beforeend', await bubble(temp));
+        c.scrollTop = c.scrollHeight;
+
+        await api('/api/messages', {
+          method:'POST',
+          body: JSON.stringify({ receiverId:state.chatUserId, content:uploads.indexOf(up)===0?text:'', type:up.type, fileUrl:up.fileUrl, fileName:up.fileName, thumbUrl:up.thumbUrl, replyTo:uploads.indexOf(up)===0?replyTo:null })
+        });
+      }
+    } else {
+      // Только текст
+      const c = $('#chat-messages');
+      c?.querySelector('.empty-state')?.remove();
+      const temp = { id:Date.now(), sender_id:userId, content:text, type:'text', reply_to:replyTo, is_read:0, created_at:new Date().toISOString() };
+      c.insertAdjacentHTML('beforeend', await bubble(temp));
+      c.scrollTop = c.scrollHeight;
+
+      await api('/api/messages', {
+        method:'POST',
+        body: JSON.stringify({ receiverId:state.chatUserId, content:text, type:'text', replyTo })
+      });
+    }
+
+    loadConversations(); loadMessagesCount();
+  } catch(err) {
+    console.error(err);
+    notify(err.message || 'Ошибка отправки', 'error');
   }
+}
+
+$('#message-form')?.addEventListener('submit', async e => {
+  e.preventDefault();
+  await sendMessage();
 });
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMediaViewer(); });
+$('#message-input')?.addEventListener('keydown', e => {
+  if (e.key==='Enter' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); sendMessage(); }
+});
 
-// ======================== ЗАГРУЗКА ФАЙЛОВ ========================
-
-// Переменная для хранения файла перед отправкой
-let pendingMessageFile = null;
-
-window.sendMessageFile = async function(file, receiverId) {
-  if (!file || !receiverId) return;
-  const fd = new FormData(); fd.append('file', file);
-  try {
-    const up = await api('/api/messages/upload', { method: 'POST', body: fd });
-    socket.emit('send_message', { receiverId, content: up.fileName, type: up.type, fileUrl: up.fileUrl });
-  } catch (e) { notify('Ошибка загрузки: ' + e.message, 'error'); }
-};
-
-// Отправка файлов из drag&drop вместе с текстом
-window.sendDroppedFiles = async function() {
-  const files = window._droppedFiles || [];
-  if (!files.length || !state.chatUserId) { cancelDropPreview(); return; }
-
-  const input = $('#message-input');
-  const textContent = input?.value.trim() || '';
-
-  // Загружаем первый файл (если несколько — отправляем по одному)
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    const isFirst = i === 0;
-    const fd = new FormData();
-    fd.append('file', file);
-    try {
-      const up = await api('/api/messages/upload', { method: 'POST', body: fd });
-      // Для первого файла добавляем текст
-      let content = up.fileName;
-      let type = up.type;
-      if (isFirst && textContent) {
-        const encrypted = await encryptMessageForUser(textContent, state.chatUserId);
-        content = encrypted.content;
-        type = 'text'; // тип будет 'text', но файл тоже есть
-      }
-      socket.emit('send_message', {
-        receiverId: state.chatUserId,
-        content,
-        type: isFirst && textContent ? 'text' : type,
-        fileUrl: up.fileUrl,
-        fileName: up.fileName
-      });
-    } catch (e) { notify('Ошибка загрузки: ' + e.message, 'error'); }
-  }
-  if (input) input.value = '';
-  cancelDropPreview();
-};
-
-// Drop zone
-window.setupDropZone = function() {
-  const chat = $('#chat-active');
-  if (!chat) return;
-
-  ['dragenter', 'dragover'].forEach(evt => { chat.addEventListener(evt, e => { e.preventDefault(); chat.classList.add('drag-over'); }); });
-  ['dragleave', 'drop'].forEach(evt => { chat.addEventListener(evt, e => { e.preventDefault(); chat.classList.remove('drag-over'); }); });
-  chat.addEventListener('drop', e => {
-    e.preventDefault();
-    if (!state.chatUserId) return;
-    const files = [...(e.dataTransfer?.files || [])].filter(f => f.type.startsWith('image/') || f.type.startsWith('audio/') || f.type.startsWith('video/'));
-    if (files.length) showDropPreview(files);
-  });
-};
-
-window.showDropPreview = function(files) {
-  let existing = $('#drop-preview'); if (existing) existing.remove();
-  const preview = document.createElement('div');
-  preview.id = 'drop-preview';
-  preview.innerHTML = files.map(f => {
+// ===== ФАЙЛЫ =====
+function updateFilePreview() {
+  const prev = $('#file-preview');
+  if (!prev) return;
+  if (!pendingFiles.length) { prev.style.display='none'; prev.innerHTML=''; return; }
+  
+  prev.style.display = 'flex';
+  prev.innerHTML = pendingFiles.map((f,i) => {
     const icon = f.type.startsWith('image/') ? '🖼️' : f.type.startsWith('audio/') ? '🎵' : '🎬';
-    return `<div class="drop-file-item"><span class="drop-file-icon">${icon}</span><span class="drop-file-name">${esc(f.name)}</span><span class="drop-file-size">${(f.size / 1024).toFixed(1)} KB</span></div>`;
-  }).join('') + `<div class="drop-actions"><button class="btn-drop-send" data-action="send-dropped-files">Отправить</button><button class="btn-drop-cancel" data-action="cancel-drop-preview">Отмена</button></div>`;
-  window._droppedFiles = files;
-  $('#chat-messages')?.after(preview);
-};
+    return `<div class="pending-file">${icon} ${esc(f.name)} <button type="button" data-action="remove-file" data-file-idx="${i}">✕</button></div>`;
+  }).join('');
+}
 
-window.sendDroppedFiles = async function() {
-  const files = window._droppedFiles || [];
-  if (state.chatUserId) for (const file of files) sendMessageFile(file, state.chatUserId);
-  cancelDropPreview();
-};
-
-window.cancelDropPreview = function() {
-  const p = $('#drop-preview'); if (p) p.remove(); window._droppedFiles = null;
-};
-
-// File input — сохраняем файл, но не отправляем сразу
 $('#message-file-input')?.addEventListener('change', e => {
   const file = e.target.files[0];
   if (file && state.chatUserId) {
-    pendingMessageFile = file;
-    // Показываем превью
-    const preview = $('#file-preview');
-    if (preview) {
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          preview.innerHTML = `<img src="${reader.result}" style="max-width:200px;max-height:120px;border-radius:8px;">
-            <button type="button" class="file-preview-remove" data-action="remove-file-preview">✕</button>`;
-        };
-        reader.readAsDataURL(file);
-      } else {
-        preview.innerHTML = `📎 ${esc(file.name)} <button type="button" class="file-preview-remove" data-action="remove-file-preview">✕</button>`;
-      }
-      preview.style.display = 'block';
-    }
+    pendingFiles.push(file);
+    updateFilePreview();
   }
   e.target.value = '';
 });
 
-// Удаление превью файла
-document.addEventListener('click', e => {
-  if (e.target.closest('[data-action="remove-file-preview"]')) {
-    pendingMessageFile = null;
-    const preview = $('#file-preview');
-    if (preview) { preview.style.display = 'none'; preview.innerHTML = ''; }
-  }
-});
-
-// Send message — Enter отправляет, Ctrl+Enter переносит строку
-$('#message-form')?.addEventListener('submit', async e => {
-  e.preventDefault();
-  const input = $('#message-input'), content = input.value.trim();
-  if (!content && !pendingMessageFile) return;
-  if (!state.chatUserId) return;
-
-  if (pendingMessageFile) {
-    // Отправляем файл + текст вместе как одно сообщение
-    const fd = new FormData();
-    fd.append('file', pendingMessageFile);
-    try {
-      const up = await api('/api/messages/upload', { method: 'POST', body: fd });
-      // Шифруем текст если есть
-      let encryptedContent = '';
-      if (content) {
-        const enc = await encryptMessageForUser(content, state.chatUserId);
-        encryptedContent = enc.content;
-      }
-      socket.emit('send_message', {
-        receiverId: state.chatUserId,
-        content: content ? encryptedContent : up.fileName,
-        type: content ? (encryptedContent ? 'e2e' : 'text') : up.type,
-        fileUrl: up.fileUrl,
-        fileName: up.fileName
-      });
-    } catch (e) { notify('Ошибка загрузки: ' + e.message, 'error'); return; }
-    pendingMessageFile = null;
-    const preview = $('#file-preview');
-    if (preview) { preview.style.display = 'none'; preview.innerHTML = ''; }
-  } else if (content) {
-    // Только текст
-    const encrypted = await encryptMessageForUser(content, state.chatUserId);
-    socket.emit('send_message', { receiverId: state.chatUserId, content: encrypted.content, type: encrypted.type });
-  }
-
-  input.value = '';
-  input.style.height = 'auto';
-});
-
-$('#message-input')?.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
-    e.preventDefault();
-    $('#message-form').requestSubmit();
-  }
-  // Ctrl+Enter — перенос строки (ничего не делаем, стандартное поведение textarea)
-});
-
-// Статус «печатает...»
-let typingTimeout;
-$('#message-input')?.addEventListener('input', () => {
-  if (!state.chatUserId) return;
-  socket.emit('typing', { toUserId: state.chatUserId });
-  clearTimeout(typingTimeout);
-  typingTimeout = setTimeout(() => {
-    socket.emit('stop_typing', { toUserId: state.chatUserId });
-  }, 2000);
-});
-
-// Приём статуса «печатает...»
-socket.on('user_typing', data => {
-  if (data.fromUserId != state.chatUserId) return;
-  const statusEl = $('#chat-status');
-  if (statusEl) {
-    statusEl.innerHTML = '<span class="online-dot" style="background:#f59e0b"></span> Печатает...';
-  }
-});
-
-socket.on('user_stop_typing', data => {
-  if (data.fromUserId != state.chatUserId) return;
-  updateChatStatus(state.chatUserId);
-});
-
-// Socket events
-socket.on('new_message', async msg => {
-  if (msg.sender_id == state.chatUserId) {
-    await appendMessageBubble(msg, 'received');
-  }
-  loadConversations(); loadMessagesCount();
-});
-
-socket.on('message_sent', async msg => {
-  await appendMessageBubble(msg, 'sent');
-  loadConversations(); loadMessagesCount();
-});
-
-// Если собеседник удалил переписку
-socket.on('chat_deleted', async data => {
-  if (state.chatUserId === data.userId) {
-    state.chatUserId = null;
-    $('#chat-active').style.display = 'none';
-    $('#chat-empty').style.display = 'flex';
-    document.querySelector('.messenger-layout')?.classList.remove('chat-open');
-    notify('Собеседник удалил переписку', 'info');
-  }
-  await loadConversations();
-});
-
-async function loadMessagesCount() {
-  try {
-    const convs = await api('/api/conversations');
-    const total = convs.reduce((s, c) => s + (c.unread_count || 0), 0);
-    const badge = $('#messages-count');
-    if (total > 0) { badge.textContent = total; badge.style.display = 'inline'; }
-    else { badge.style.display = 'none'; }
-  } catch (e) { console.error('loadMessagesCount:', e); }
+// Drag & Drop
+function setupDropZone() {
+  const chat = $('#chat-active');
+  if (!chat) return;
+  chat.addEventListener('dragover', e => { e.preventDefault(); chat.classList.add('drag-over'); });
+  chat.addEventListener('dragleave', () => chat.classList.remove('drag-over'));
+  chat.addEventListener('drop', e => {
+    e.preventDefault(); chat.classList.remove('drag-over');
+    if (!state.chatUserId) return;
+    const files = [...(e.dataTransfer?.files||[])].filter(f=>f.type.match(/^(image|audio|video)/));
+    pendingFiles.push(...files);
+    updateFilePreview();
+  });
 }
 
-// Delete chat
+// ===== REPLY =====
+function setReply(msgId, text) {
+  replyTo = msgId;
+  const input = $('#message-input');
+  if (input) {
+    input.placeholder = `↪ Ответ на: ${text.substring(0,50)}...`;
+    input.focus();
+  }
+  const bar = $('#reply-bar');
+  if (bar) { bar.textContent = `↪ Ответ на сообщение`; bar.style.display = 'flex'; }
+}
+
+function clearReply() {
+  replyTo = null;
+  const input = $('#message-input');
+  if (input) input.placeholder = 'Напишите сообщение...';
+  const bar = $('#reply-bar');
+  if (bar) bar.style.display = 'none';
+}
+
+// ===== КЛИКИ =====
+document.addEventListener('click', e => {
+  // Клик по диалогу
+  const convItem = e.target.closest('.conv-item');
+  if (convItem && !e.target.closest('a')) {
+    e.preventDefault();
+    openChat(
+      parseInt(convItem.dataset.chatId),
+      convItem.dataset.chatName,
+      convItem.dataset.chatAvatar,
+      convItem.dataset.chatUsername
+    );
+    return;
+  }
+
+  // Удалить файл из превью
+  const rmFile = e.target.closest('[data-action="remove-file"]');
+  if (rmFile) {
+    const idx = parseInt(rmFile.dataset.fileIdx);
+    pendingFiles.splice(idx, 1);
+    updateFilePreview();
+    return;
+  }
+
+  // Reply
+  const replyBtn = e.target.closest('[data-action="reply"]');
+  if (replyBtn) {
+    const msgId = parseInt(replyBtn.dataset.msgId);
+    const msgEl = replyBtn.closest('.msg');
+    const text = msgEl?.querySelector('.msg-text')?.textContent || '';
+    setReply(msgId, text);
+    return;
+  }
+
+  // Edit
+  const editBtn = e.target.closest('[data-action="edit"]');
+  if (editBtn) {
+    const msgId = parseInt(editBtn.dataset.msgId);
+    const msgEl = editBtn.closest('.msg');
+    const textEl = msgEl?.querySelector('.msg-text');
+    if (!textEl) return;
+    
+    const currentText = textEl.textContent.replace(' (ред.)','');
+    textEl.innerHTML = `<textarea class="edit-input" data-msg-id="${msgId}">${esc(currentText)}</textarea>
+      <button class="edit-save" data-msg-id="${msgId}">✓</button>
+      <button class="edit-cancel" data-msg-id="${msgId}">✕</button>`;
+    const ta = textEl.querySelector('.edit-input');
+    ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+    editingMsgId = msgId;
+    return;
+  }
+
+  // Save edit
+  const saveBtn = e.target.closest('.edit-save');
+  if (saveBtn) {
+    const msgId = parseInt(saveBtn.dataset.msgId);
+    const ta = saveBtn.parentElement.querySelector('.edit-input');
+    const newText = ta.value.trim();
+    if (!newText) return;
+    
+    api(`/api/messages/${msgId}`, { method:'PUT', body:JSON.stringify({content:newText}) })
+      .then(() => {
+        ta.parentElement.textContent = esc(newText) + ' (ред.)';
+        notify('Сообщение изменено');
+      })
+      .catch(err => notify(err.message, 'error'));
+    return;
+  }
+
+  // Cancel edit
+  const cancelBtn = e.target.closest('.edit-cancel');
+  if (cancelBtn) {
+    const msgEl = cancelBtn.closest('.msg');
+    const textEl = msgEl.querySelector('.msg-text');
+    // Перезагружаем сообщения
+    loadMessages(state.chatUserId);
+    return;
+  }
+
+  // Delete
+  const delBtn = e.target.closest('[data-action="delete"]');
+  if (delBtn) {
+    const msgId = parseInt(delBtn.dataset.msgId);
+    if (!confirm('Удалить сообщение?')) return;
+    api(`/api/messages/${msgId}`, { method:'DELETE' })
+      .then(() => {
+        const msgEl = delBtn.closest('.msg');
+        if (msgEl) {
+          msgEl.querySelector('.msg-text').innerHTML = '<em>Сообщение удалено</em>';
+          msgEl.querySelector('.msg-actions')?.remove();
+          msgEl.querySelector('.msg-media')?.remove();
+        }
+      })
+      .catch(err => notify(err.message, 'error'));
+    return;
+  }
+
+  // Clear reply
+  if (e.target.closest('[data-action="clear-reply"]')) { clearReply(); return; }
+
+  if (e.target.closest('[data-action="close-media-viewer"]')) closeMediaViewer();
+  const img = e.target.closest('[data-action="view-media"]');
+  if (img) { e.preventDefault(); openMediaViewer(img.dataset.url, img.dataset.type); }
+  const more = e.target.closest('.load-more');
+  if (more) { e.preventDefault(); loadOlderMessages(parseInt(more.dataset.fid)); }
+});
+
+// Typing
+let typingT;
+$('#message-input')?.addEventListener('input', () => {
+  if (!state.chatUserId) return;
+  socket.emit('typing', {toUserId:state.chatUserId});
+  clearTimeout(typingT);
+  typingT = setTimeout(() => socket.emit('stop_typing', {toUserId:state.chatUserId}), 2000);
+});
+
+// Счётчик
+window.loadMessagesCount = async function() {
+  try {
+    const d = await api('/api/messages/count');
+    const b = $('#messages-count');
+    if (b) { b.textContent=d.count; b.style.display=d.count>0?'inline':'none'; }
+  } catch {}
+};
+
+// Удаление переписки
 window.confirmDeleteChat = async function() {
   if (!state.chatUserId) return notify('Откройте диалог', 'error');
-  if (!confirm('Удалить всю переписку? Это действие нельзя отменить.')) return;
+  if (!confirm('Удалить переписку?')) return;
   try {
-    const deletedUserId = state.chatUserId;
-    await api(`/api/messages/${state.chatUserId}`, { method: 'DELETE' });
+    const uid = state.chatUserId;
+    await api(`/api/messages/${uid}`, {method:'DELETE'});
     state.chatUserId = null;
     $('#chat-active').style.display = 'none';
     $('#chat-empty').style.display = 'flex';
-    document.querySelector('.messenger-layout')?.classList.remove('chat-open');
-    await loadConversations();
-    // Уведомляем другого пользователя что переписка удалена
-    socket.emit('chat_deleted', { userId: deletedUserId });
+    socket.emit('chat_deleted', {userId:uid});
+    loadConversations();
     notify('Переписка удалена');
-  } catch (e) { notify('Ошибка: ' + e.message, 'error'); }
+  } catch(e) { notify('Ошибка', 'error'); }
 };
 
-// Init drop zone
+// Init
 setupDropZone();
-
-// Делегирование для медиа-элементов (вместо inline onclick)
-document.addEventListener('click', e => {
-  // Закрытие медиа-вьюера
-  if (e.target.closest('[data-action="close-media-viewer"]')) {
-    closeMediaViewer();
-    return;
-  }
-
-  // Просмотр медиа
-  const mediaImg = e.target.closest('[data-action="view-media"]');
-  if (mediaImg) {
-    e.preventDefault();
-    openMediaViewer(mediaImg.dataset.url, mediaImg.dataset.type);
-    return;
-  }
-
-  // Play/pause аудио
-  const audioBtn = e.target.closest('[data-action="toggle-audio"]');
-  if (audioBtn) {
-    e.preventDefault();
-    const player = audioBtn.closest('.audio-player');
-    const audio = player?.querySelector('audio');
-    const fill = player?.querySelector('.audio-progress-fill');
-    const curEl = player?.querySelector('.cur');
-    if (!audio || !fill || !curEl) return;
-
-    if (audio.duration && !isNaN(audio.duration) && !player.querySelector('.tot').textContent) {
-      const m = Math.floor(audio.duration / 60), s = Math.floor(audio.duration % 60);
-      player.querySelector('.tot').textContent = m + ':' + (s < 10 ? '0' : '') + s;
-    }
-
-    if (audio.paused) {
-      document.querySelectorAll('.audio-player audio').forEach(a => {
-        if (a !== audio) { a.pause(); a.closest('.audio-player').querySelector('.audio-play-btn svg').innerHTML = '<path d="M8 5v14l11-7z"/>'; }
-      });
-      audio.play();
-      audioBtn.querySelector('svg').innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
-      const update = () => {
-        if (audio.paused || audio.ended) {
-          audioBtn.querySelector('svg').innerHTML = '<path d="M8 5v14l11-7z"/>';
-          fill.style.width = '0%'; curEl.textContent = '0:00'; return;
-        }
-        fill.style.width = (audio.currentTime / audio.duration) * 100 + '%';
-        const m = Math.floor(audio.currentTime / 60), s = Math.floor(audio.currentTime % 60);
-        curEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
-        requestAnimationFrame(update);
-      };
-      requestAnimationFrame(update);
-    } else {
-      audio.pause();
-      audioBtn.querySelector('svg').innerHTML = '<path d="M8 5v14l11-7z"/>';
-    }
-    return;
-  }
-
-  // Перемотка аудио
-  const seekWrap = e.target.closest('[data-action="seek-audio"]');
-  if (seekWrap) {
-    e.preventDefault();
-    const audio = seekWrap.closest('.audio-player')?.querySelector('audio');
-    if (!audio?.duration || isNaN(audio.duration)) return;
-    const rect = seekWrap.getBoundingClientRect();
-    audio.currentTime = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * audio.duration;
-    return;
-  }
-
-  // Отправка dropped файлов
-  if (e.target.closest('[data-action="send-dropped-files"]')) {
-    e.preventDefault();
-    if (typeof sendDroppedFiles === 'function') sendDroppedFiles();
-    return;
-  }
-
-  // Отмена dropped файлов
-  if (e.target.closest('[data-action="cancel-drop-preview"]')) {
-    e.preventDefault();
-    if (typeof cancelDropPreview === 'function') cancelDropPreview();
-    return;
-  }
-
-  // Загрузить старые сообщения
-  const loadMoreBtn = e.target.closest('.load-more-messages');
-  if (loadMoreBtn) {
-    e.preventDefault();
-    loadOlderMessages(parseInt(loadMoreBtn.dataset.fid));
-  }
-});

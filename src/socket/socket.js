@@ -20,8 +20,8 @@ const socketRateLimits = new Map();
 /** @type {Map<number, { typingReset: number }>} userId -> typing rate limit */
 const typingRateLimits = new Map();
 
-const SOCKET_RATE_LIMIT = 10; // макс. сообщений в минуту
-const SOCKET_RATE_WINDOW = 60 * 1000;
+const SOCKET_RATE_LIMIT = parseInt(process.env.SOCKET_RATE_LIMIT) || 30;
+const SOCKET_RATE_WINDOW = parseInt(process.env.SOCKET_RATE_WINDOW) || 60000;
 const TYPING_RATE_WINDOW = 3000; // мин. 3 сек между typing событиями
 
 /**
@@ -130,9 +130,16 @@ function setupSocket(io, db) {
       const { receiverId, content, type = 'text', fileUrl = '', fileName = '' } = data;
       const receiver = parseInt(receiverId);
 
+      // Валидация
       if (!receiver || isNaN(receiver)) return;
       if (receiver === userId) return;
       if (!content && !fileUrl) return;
+      
+      // Лимит размера сообщения
+      if (content && content.length > 2000) {
+        socket.emit('error', { message: 'Сообщение слишком длинное' });
+        return;
+      }
 
       if (checkSocketRateLimit(userId)) {
         socket.emit('error', { message: 'Слишком много сообщений, подождите' });
@@ -193,6 +200,21 @@ function setupSocket(io, db) {
 
     // ========== Отключение ==========
     socket.on('disconnect', () => {
+      // Очищаем typing состояние
+      typingUsers.forEach((targets, typingUserId) => {
+        if (targets.has(userId)) {
+          targets.forEach(targetUserId => {
+            const targetSockets = connectedUsers.get(targetUserId);
+            if (targetSockets) {
+              targetSockets.forEach(sid => {
+                io.to(sid).emit('user_stop_typing', { fromUserId: userId });
+              });
+            }
+          });
+          targets.delete(userId);
+        }
+      });
+
       const sockets = connectedUsers.get(userId);
       if (sockets) {
         sockets.delete(socket.id);
@@ -280,4 +302,4 @@ function broadcastNewPost(post, authorId) {
   });
 }
 
-module.exports = { setupSocket, connectedUsers, typingUsers, sendNotification, getConnectionCount, broadcastNewPost };
+module.exports = { setupSocket, connectedUsers, sendNotification, broadcastNewPost };

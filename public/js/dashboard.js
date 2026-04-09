@@ -13,7 +13,6 @@
     // === Инициализация E2E шифрования ===
     const savedKey = localStorage.getItem('e2e_private_key');
     if (savedKey) {
-      // Импортируем существующий приватный ключ
       try {
         const jwk = JSON.parse(savedKey);
         await E2E.importPrivateKey(jwk);
@@ -23,7 +22,6 @@
         await generateAndSaveKeys();
       }
     } else {
-      // Генерируем новые ключи
       await generateAndSaveKeys();
     }
 
@@ -31,20 +29,20 @@
       const { publicKey } = await E2E.generateKeys();
       const jwk = await E2E.exportPrivateKey();
       localStorage.setItem('e2e_private_key', JSON.stringify(jwk));
-      // Сохраняем публичный ключ на сервере (в bio временно)
       try {
         await api('/api/profile', {
           method: 'PUT',
           body: JSON.stringify({ display_name: profile.display_name || '', bio: profile.bio || '', e2e_public_key: publicKey })
         });
-      } catch {}
+      } catch (e) {
+        // Не критично — ключ сохранится при следующем запросе
+        console.warn('[E2E] Не удалось сохранить публичный ключ:', e.message);
+      }
       console.log('[E2E] Новые ключи сгенерированы');
     }
 
     // Инициализация навигации и роутинга
     if (typeof initNavigation === 'function') initNavigation();
-
-    // Обновляем user-card в сайдбаре на ЛЮБОЙ странице
     if (typeof updateUserCard === 'function') updateUserCard();
 
     // Splash: держим до полной загрузки всех ресурсов
@@ -71,10 +69,10 @@
     setInterval(() => {
       if (typeof currentPage !== 'undefined' && currentPage === 'messages' && typeof state !== 'undefined' && !state.chatUserId) loadConversations();
     }, 30000);
-  } catch {
-    // Не авторизован — редирект
-    document.body.style.display = '';
-    window.location.href = '/';
+  } catch (err) {
+    // api() уже делает редирект на '/' при 401/403
+    // Сюда попадаем только при network ошибке — НЕ редиректим
+    console.error('[dashboard] init error:', err);
   }
 })();
 
@@ -84,11 +82,7 @@ if (typeof socket !== 'undefined') {
     // Добавляем пост только если мы на странице ленты
     if (typeof currentPage === 'undefined' || currentPage !== 'feed') return;
 
-    // Если активен фильтр 'Мои' — пост от другого пользователя не показываем
-    if (typeof feedState !== 'undefined' && feedState.filter === 'mine' && post.author_id !== window.currentUserId) return;
-
-    // Если активен фильтр 'Друзья' — проверяем что автор в друзьях
-    // (для простоты просто перезагружаем ленту)
+    // Если активен фильтр 'Друзья' — перезагружаем ленту
     if (typeof feedState !== 'undefined' && feedState.filter === 'friends') {
       if (typeof loadAllUsers === 'function') loadAllUsers();
       return;

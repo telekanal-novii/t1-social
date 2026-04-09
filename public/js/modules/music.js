@@ -244,17 +244,34 @@ window.uploadMusic = async function(file, title, artist) {
   if (title) fd.append('title', title);
   if (artist) fd.append('artist', artist);
 
-  const res = await fetch('/api/music/upload', {
-    method: 'POST',
-    credentials: 'include',
-    body: fd
-  });
-  if (!res.ok) {
-    const data = await res.json();
-    throw new Error(data.error || 'Ошибка загрузки');
+  // UI элементы прогресса
+  const progressContainer = $('#music-upload-progress');
+  const progressBar = $('#music-upload-progress-bar');
+  const progressText = $('#music-upload-progress-text');
+
+  try {
+    // Показываем прогресс
+    if (progressContainer) progressContainer.classList.add('active');
+    if (progressBar) progressBar.style.width = '0%';
+    if (progressText) progressText.textContent = 'Загрузка... 0%';
+
+    const res = await uploadWithProgress('/api/music/upload', fd, (loaded, total) => {
+      const pct = Math.round((loaded / total) * 100);
+      if (progressBar) progressBar.style.width = `${pct}%`;
+      if (progressText) progressText.textContent = `Загрузка... ${pct}%`;
+    });
+
+    // Успех
+    notify('Трек загружен');
+    await loadMusic();
+  } catch (e) {
+    throw new Error(e.message || 'Ошибка загрузки');
+  } finally {
+    // Скрываем прогресс
+    if (progressContainer) progressContainer.classList.remove('active');
+    if (progressBar) progressBar.style.width = '0%';
+    if (progressText) progressText.textContent = 'Загрузка... 0%';
   }
-  notify('Трек загружен');
-  await loadMusic();
 };
 
 /**

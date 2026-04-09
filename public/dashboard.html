@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Т1 Сеть</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/dashboard.css?v=12">
-  <link rel="stylesheet" href="css/music.css?v=3">
+  <link rel="stylesheet" href="css/dashboard.css?v=15">
+  <link rel="stylesheet" href="css/messenger.css?v=1">
+  <link rel="stylesheet" href="css/music.css?v=6">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body style="background:#0f172a;">
@@ -174,7 +175,6 @@
       <div class="feed-tabs">
         <button class="feed-tab active" data-feed-filter="all" title="Все посты">🌐 Все</button>
         <button class="feed-tab" data-feed-filter="friends" title="Посты друзей">👥 Друзья</button>
-        <button class="feed-tab" data-feed-filter="mine" title="Мои посты">✏️ Мои</button>
         <div class="feed-sort">
           <button class="feed-sort-btn active" data-feed-sort="new" title="Сначала новые">🕐 Новые</button>
           <button class="feed-sort-btn" data-feed-sort="popular" title="По количеству лайков">🔥 Популярные</button>
@@ -462,6 +462,10 @@
 
             <form id="message-form" class="message-input-modern">
               <input type="file" id="message-file-input" style="display:none" accept="image/*,audio/*,video/*">
+              <div id="reply-bar" class="reply-bar" style="display:none;">
+                <span>↪ Ответ</span>
+                <button type="button" class="reply-cancel" data-action="clear-reply">✕</button>
+              </div>
               <div id="file-preview" class="file-preview" style="display:none;"></div>
               <div class="message-input-row">
                 <button type="button" class="btn-attach" id="btn-attach" title="Прикрепить файл">
@@ -516,6 +520,12 @@
               <input type="text" id="music-artist" placeholder="Имя исполнителя">
             </div>
             <div id="music-upload-error" class="music-error" style="display:none;"></div>
+            <div id="music-upload-progress" class="upload-progress-container">
+              <div class="upload-progress-bar-wrap">
+                <div class="upload-progress-bar-fill" id="music-upload-progress-bar"></div>
+              </div>
+              <div class="upload-progress-text" id="music-upload-progress-text">Загрузка... 0%</div>
+            </div>
             <button type="submit" class="music-upload-submit">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:18px;height:18px"><polyline points="20 6 9 17 4 12"></polyline></svg>
               Загрузить
@@ -711,7 +721,7 @@
   <script src="js/modules/api.js?v=4"></script>
   <script src="js/modules/profile.js?v=8"></script>
   <script src="js/modules/friends.js?v=3"></script>
-  <script src="js/modules/messages.js?v=13"></script>
+  <script src="js/modules/messages.js?v=20"></script>
   <script src="js/modules/userProfile.js?v=3"></script>
   <script src="js/modules/navigation.js?v=4"></script>
   <script src="js/modules/handlers.js?v=9"></script>

@@ -60,7 +60,7 @@ function postCardHTML(p, userId, showComments = false) {
 
 // Состояние фильтров ленты
 const feedState = {
-  filter: 'all',    // all | friends | mine
+  filter: 'all',    // all | friends
   sort: 'new'       // new | popular
 };
 
@@ -76,7 +76,6 @@ async function loadAllUsers() {
 
     if (!posts.length) {
       const emptyMsg = feedState.filter === 'friends' ? 'У друзей пока нет записей'
-        : feedState.filter === 'mine' ? 'У вас пока нет записей'
         : 'Пока нет записей';
       c.innerHTML = `<div class="wall-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><p>${emptyMsg}</p></div>`;
       return;
@@ -404,6 +403,8 @@ async function publishPost(uid = userId, inId = 'post-content', ctrId = 'char-co
   const fileInput = $(`#${fileId}`);
   const file = fileInput?.files?.[0];
 
+  console.log('[publishPost] content:', content ? content.substring(0, 50) : '(пусто)', 'file:', file ? file.name : '(нет)');
+
   if (!content && !file) return notify('Добавьте текст или изображение', 'error');
   if (content && content.length > 500) return notify('Максимум 500 символов', 'error');
 
@@ -411,15 +412,22 @@ async function publishPost(uid = userId, inId = 'post-content', ctrId = 'char-co
   if (content) fd.append('content', content);
   if (file) fd.append('image', file);
 
+  console.log('[publishPost] FormData content:', fd.has('content'), 'image:', fd.has('image'));
+
   try {
-    await fetch(`/api/wall/${uid}`, {
+    const response = await fetch(`/api/wall/${uid}`, {
       method: 'POST',
       credentials: 'include',
       body: fd
-    }).then(r => {
-      if (!r.ok) return r.json().then(d => { throw new Error(d.error); });
-      return r.json();
     });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Ошибка сервера');
+    }
+    
+    const result = await response.json();
+    console.log('[publishPost] Success:', result);
 
     ta.value = '';
     $(`#${ctrId}`).textContent = '0/500';
@@ -441,7 +449,10 @@ async function publishPost(uid = userId, inId = 'post-content', ctrId = 'char-co
     if (wId === 'feed-posts') loadAllUsers();
     else await loadWall(uid, wId);
     notify('Пост опубликован!');
-  } catch (e) { notify('Ошибка: ' + e.message, 'error'); }
+  } catch (e) { 
+    console.error('[publishPost] Error:', e);
+    notify('Ошибка: ' + e.message, 'error'); 
+  }
   finally { publishingPosts.delete(publishKey); }
 }
 

@@ -29,17 +29,16 @@ async function api(url, opts = {}) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Ошибка сервера' }));
-    // Если 401/403 — возможно сессия истекла
+    // Если 401/403 — сессия истекла
     if (res.status === 401 || res.status === 403) {
-      // КРИТИЧНО: НЕ чистим localStorage — сохраняем E2E ключи
+      // Сохраняем E2E ключи и лайки
       const e2eKey = localStorage.getItem('e2e_private_key');
       const likedPosts = localStorage.getItem('likedPosts');
       localStorage.clear();
-      // Восстанавливаем E2E ключ и лайки
       if (e2eKey) localStorage.setItem('e2e_private_key', e2eKey);
       if (likedPosts) localStorage.setItem('likedPosts', likedPosts);
-      // Удаляем куки токена
-      document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT';
+      // Удаляем cookie через серверный logout (httpOnly нельзя удалить из JS)
+      try { await fetch('/api/logout', { method:'POST', credentials:'include' }); } catch {}
       window.location.href = '/';
     }
     throw new Error(err.error || 'Неизвестная ошибка');

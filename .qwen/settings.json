@@ -5,7 +5,10 @@
       "Bash(git rebase *)",
       "Bash(git pull *)",
       "Bash(git checkout *)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(del *)",
+      "Bash(sqlite3 *)",
+      "Bash(node *)"
     ]
   },
   "$version": 3

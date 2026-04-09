@@ -9,8 +9,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const router = express.Router();
-const db = require('../../config/database');
-const { JWT_SECRET } = require('../middleware/auth');
+const { JWT_SECRET, blacklistToken } = require('../middleware/auth');
+const { dbRun, dbGet } = require('../utils/db');
 
 /**
  * Устанавливает httpOnly cookie с токеном
@@ -18,12 +18,11 @@ const { JWT_SECRET } = require('../middleware/auth');
  */
 function setTokenCookie(res, token) {
   const isProd = process.env.NODE_ENV === 'production';
-  // Запрещаем CDN/браузеру кэшировать ответ с куками
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.set('Pragma', 'no-cache');
   res.set('Expires', '0');
   res.set('Surrogate-Control', 'no-store');
-  
+
   res.cookie('token', token, {
     httpOnly: true,
     secure: isProd,
@@ -38,13 +37,12 @@ function setTokenCookie(res, token) {
  */
 function createDeviceFingerprint(req) {
   const ua = req.headers['user-agent'] || '';
-  return require('crypto').createHash('md5').update(ua.slice(0, 128)).digest('hex').slice(0, 16);
+  return crypto.createHash('md5').update(ua.slice(0, 128)).digest('hex').slice(0, 16);
 }
 
 /**
+ * POST /api/register
  * Регистрация нового пользователя
- * @body {string} username - Логин (2-30 символов, a-z, 0-9, _, -)
- * @body {string} password - Пароль (мин. 8 символов)
  */
 router.post('/api/register', async (req, res) => {
   try {
@@ -67,76 +65,97 @@ router.post('/api/register', async (req, res) => {
 
     const hashed = await bcrypt.hash(password, 10);
 
-    db.run(
-      'INSERT INTO users (username, password) VALUES (?, ?)',
-      [username.trim(), hashed],
-      function (err) {
-        if (err) {
-          return err.message.includes('UNIQUE')
-            ? res.status(400).json({ error: 'Логин уже занят' })
-            : res.status(500).json({ error: 'Ошибка регистрации' });
-        }
+    try {
+      const { lastID: userId } = await dbRun(
+        'INSERT INTO users (username, password) VALUES (?, ?)',
+        [username.trim(), hashed]
+      );
 
-        const userId = this.lastID;
-        // Привязываем токен к устройству
-        const deviceFp = createDeviceFingerprint(req);
-        const token = jwt.sign({
-          id: userId,
-          username,
-          jti: crypto.randomUUID(),
-          iat: Date.now(),
-          device: deviceFp
-        }, JWT_SECRET, { expiresIn: '7d' });
-        setTokenCookie(res, token);
-        res.status(201).json({ userId, username });
+      const deviceFp = createDeviceFingerprint(req);
+      const token = jwt.sign({
+        id: userId,
+        username,
+        jti: crypto.randomUUID(),
+        iat: Date.now(),
+        device: deviceFp
+      }, JWT_SECRET, { expiresIn: '7d' });
+      
+      setTokenCookie(res, token);
+      res.status(201).json({ userId, username });
+    } catch (err) {
+      if (err.message.includes('UNIQUE')) {
+        return res.status(400).json({ error: 'Логин уже занят' });
       }
-    );
-  } catch {
+      throw err;
+    }
+  } catch (err) {
+    console.error('[auth:register] Ошибка:', err.message);
     res.status(500).json({ error: 'Ошибка сервера' });
   }
 });
 
 /**
+ * POST /api/login
  * Авторизация пользователя
- * @body {string} username
- * @body {string} password
  */
-router.post('/api/login', (req, res) => {
-  const { username, password } = req.body;
+router.post('/api/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
 
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Логин и пароль обязательны' });
-  }
-
-  db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
-    if (err) return res.status(500).json({ error: 'Ошибка сервера' });
-    if (!user) return res.status(401).json({ error: 'Неверный логин или пароль' });
-
-    try {
-      const isValid = await bcrypt.compare(password, user.password);
-      if (!isValid) return res.status(401).json({ error: 'Неверный логин или пароль' });
-
-      // Привязываем токен к устройству
-      const deviceFp = createDeviceFingerprint(req);
-      const token = jwt.sign({
-        id: user.id,
-        username: user.username,
-        jti: crypto.randomUUID(),
-        iat: Date.now(),
-        device: deviceFp
-      }, JWT_SECRET, { expiresIn: '7d' });
-      setTokenCookie(res, token);
-      res.json({ userId: user.id, username: user.username });
-    } catch {
-      res.status(500).json({ error: 'Ошибка сервера' });
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Логин и пароль обязательны' });
     }
-  });
+
+    // Получаем пользователя БЕЗ пароля в ответе
+    const user = await dbGet(
+      'SELECT id, username, password FROM users WHERE username = ?',
+      [username]
+    );
+
+    if (!user) {
+      return res.status(401).json({ error: 'Неверный логин или пароль' });
+    }
+
+    const isValid = await bcrypt.compare(password, user.password);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Неверный логин или пароль' });
+    }
+
+    const deviceFp = createDeviceFingerprint(req);
+    const token = jwt.sign({
+      id: user.id,
+      username: user.username,
+      jti: crypto.randomUUID(),
+      iat: Date.now(),
+      device: deviceFp
+    }, JWT_SECRET, { expiresIn: '7d' });
+    
+    setTokenCookie(res, token);
+    res.json({ userId: user.id, username: user.username });
+  } catch (err) {
+    console.error('[auth:login] Ошибка:', err.message);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
 });
 
 /**
- * Выход — удаляем cookie
+ * POST /api/logout
+ * Выход — добавляем токен в blacklist и удаляем cookie
  */
 router.post('/api/logout', (req, res) => {
+  // Добавляем токен в blacklist если он есть
+  const token = req.cookies?.token;
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      if (decoded.jti) {
+        blacklistToken(decoded.jti);
+      }
+    } catch (e) {
+      // Игнорируем ошибки — токен мог истечь
+    }
+  }
+  
   res.clearCookie('token', { path: '/' });
   res.json({ success: true });
 });

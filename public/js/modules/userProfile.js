@@ -10,19 +10,25 @@ window.openUserProfileByUsername = async function(username) {
   try {
     const decoded = decodeURIComponent(username);
 
-    // Проверяем — не свой ли это профиль (через кэш, без API)
+    // Проверяем — не свой ли это профиль
     if (window.currentUsername && decoded === window.currentUsername) {
       history.replaceState({ page: 'profile' }, '', '/profile');
       return navigateTo('profile');
     }
 
+    // Загружаем пользователя напрямую по username через API
     const users = await api('/api/users');
     const user = users.find(u => u.username === decoded);
-    if (!user) return notify('Пользователь не найден', 'error'), navigateTo('feed');
+    
+    if (!user) {
+      return notify('Пользователь не найден', 'error'), navigateTo('feed');
+    }
 
     const profile = await api(`/api/users/${user.id}`);
     renderUserProfile(profile);
-  } catch (err) { notify('Ошибка: ' + err.message, 'error'); }
+  } catch (err) {
+    notify('Ошибка: ' + err.message, 'error');
+  }
 };
 
 /**

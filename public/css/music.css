@@ -75,20 +75,20 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
 }
 
 .global-player-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
 .gp-btn {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: transparent;
   border: none;
@@ -112,8 +112,8 @@
 
 /* Кнопка Play — акцентная */
 .gp-btn.gp-play {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   background: var(--primary);
   color: white;
   box-shadow: 0 2px 12px rgba(99, 102, 241, .35);
@@ -125,10 +125,20 @@
   transform: scale(1.1);
 }
 
-/* Кнопки пропуска — чуть меньше */
+.gp-btn.gp-play:active {
+  transform: scale(1.05);
+}
+
+/* Кнопки пропуска — стандартный размер */
 .gp-btn.gp-skip {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
+}
+
+/* Кнопка повтора */
+.gp-btn.gp-repeat {
+  width: 36px;
+  height: 36px;
 }
 
 /* Время */
@@ -136,9 +146,10 @@
   font-size: 12px;
   color: var(--text-muted);
   flex-shrink: 0;
-  min-width: 80px;
+  min-width: 90px;
   text-align: center;
   font-variant-numeric: tabular-nums;
+  margin-left: 4px;
 }
 
 /* Прогресс-бар */
@@ -241,7 +252,59 @@
   margin-bottom: 24px;
 }
 
-.music-upload-form input[type="text"] {
+.music-upload-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.music-upload-header h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.music-cancel-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .15s ease;
+  flex-shrink: 0;
+}
+
+.music-cancel-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  transform: scale(1.08);
+}
+
+.music-cancel-btn:active {
+  transform: scale(0.95);
+}
+
+.music-field {
+  margin-bottom: 14px;
+}
+
+.music-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.music-upload-form input[type="text"],
+.music-upload-form input[type="file"] {
   width: 100%;
   padding: 10px 14px;
   background: var(--bg-tertiary);
@@ -249,10 +312,11 @@
   border-radius: var(--radius);
   color: var(--text-primary);
   font-size: 14px;
-  margin-bottom: 10px;
+  transition: var(--transition);
 }
 
-.music-upload-form input[type="text"]:focus {
+.music-upload-form input[type="text"]:focus,
+.music-upload-form input[type="file"]:focus {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(99, 102, 241, .15);
@@ -261,12 +325,101 @@
 .music-upload-form input[type="file"] {
   font-size: 13px;
   color: var(--text-secondary);
+  cursor: pointer;
+  padding: 8px 12px;
+}
+
+.music-upload-form input[type="file"]::file-selector-button {
+  padding: 6px 14px;
+  margin-right: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.music-upload-form input[type="file"]::file-selector-button:hover {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
 }
 
 .music-upload-error {
   color: var(--danger);
   font-size: 13px;
   margin-top: 8px;
+  display: none;
+}
+
+.music-upload-submit {
+  width: 100%;
+  padding: 12px 16px;
+  margin-top: 16px;
+  background: var(--primary);
+  border: none;
+  border-radius: var(--radius);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: var(--transition);
+  box-shadow: 0 2px 12px rgba(99, 102, 241, .35);
+}
+
+.music-upload-submit:hover {
+  background: var(--primary-dark);
+  box-shadow: 0 4px 20px rgba(99, 102, 241, .5);
+  transform: translateY(-1px);
+}
+
+.music-upload-submit:active {
+  transform: translateY(0);
+}
+
+.music-upload-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Прогресс-бар загрузки */
+.upload-progress-container {
+  margin-top: 16px;
+  display: none;
+}
+
+.upload-progress-container.active {
+  display: block;
+}
+
+.upload-progress-bar-wrap {
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.upload-progress-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 3px;
+  transition: width 0.2s ease;
+  width: 0%;
+}
+
+.upload-progress-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
 }
 
 /* ===========================
@@ -491,11 +644,16 @@
   }
 
   .gp-btn {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
   }
 
   .gp-btn.gp-play {
+    width: 38px;
+    height: 38px;
+  }
+
+  .gp-btn.gp-skip {
     width: 32px;
     height: 32px;
   }

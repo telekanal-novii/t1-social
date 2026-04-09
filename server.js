@@ -51,7 +51,7 @@ const authLimiter = rateLimit({
 // Общий лимит для API
 const apiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 минута
-  max: 100, // 100 запросов в минуту
+  max: 200, // 200 запросов в минуту
   message: { error: 'Слишком много запросов' },
   standardHeaders: true,
   legacyHeaders: false
@@ -116,6 +116,7 @@ app.use('/media', express.static(path.join(__dirname, 'public', 'media')));
 
 // === Socket.IO ===
 setupSocket(io, db);
+app.locals.io = io; // Делаем io доступным в маршрутах
 
 // === API Routes ===
 app.use('/api/register', authLimiter);

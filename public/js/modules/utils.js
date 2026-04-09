@@ -52,6 +52,11 @@ socket.on('connect', () => {
     connectionStatusEl.style.opacity = '0';
     setTimeout(() => { if (connectionStatusEl) connectionStatusEl.style.display = 'none'; }, 300);
   }
+  // Обновляем UI — показываем что соединение восстановлено
+  const indicator = $('#connection-indicator');
+  if (indicator && indicator.style.display === 'block') {
+    notify('Соединение восстановлено', 'success');
+  }
 });
 
 socket.on('disconnect', (reason) => {
@@ -64,12 +69,26 @@ socket.on('disconnect', (reason) => {
 socket.on('connect_error', (err) => {
   console.error('[socket] Ошибка подключения:', err.message);
   if (err.message === 'Неверный токен' || err.message === 'Требуется авторизация') {
-    window.location.href = '/';
+    notify('Сессия истекла. Перезагрузка...', 'error');
+    setTimeout(() => { window.location.href = '/'; }, 2000);
+  } else {
+    // Показываем пользователю что соединение потеряно
+    createConnectionIndicator();
+    connectionStatusEl.style.display = 'block';
+    connectionStatusEl.style.opacity = '1';
   }
 });
 
 socket.on('reconnect', (attempt) => {
   console.log('[socket] Переподключено после', attempt, 'попыток');
+  if (attempt > 1) {
+    notify(`✓ Переподключено (попытка ${attempt})`, 'success');
+  }
+});
+
+socket.on('reconnect_failed', () => {
+  console.error('[socket] Переподключение не удалось');
+  notify('✗ Не удалось переподключиться. Обновите страницу.', 'error');
 });
 
 /**
@@ -191,6 +210,46 @@ function notify(msg, type = 'success') {
   }, 3500);
 }
 notify._id = 0;
+
+/**
+ * Загружает файл с отслеживанием прогресса
+ * @param {string} url
+ * @param {FormData} formData
+ * @param {Function} onProgress — callback с (loaded, total)
+ * @returns {Promise<Object>}
+ */
+window.uploadWithProgress = function(url, formData, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    
+    xhr.open('POST', url);
+    xhr.withCredentials = true;
+    
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(e.loaded, e.total);
+      }
+    });
+    
+    xhr.addEventListener('load', () => {
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(data);
+        } else {
+          reject(new Error(data.error || 'Ошибка загрузки'));
+        }
+      } catch (err) {
+        reject(new Error('Ошибка обработки ответа'));
+      }
+    });
+    
+    xhr.addEventListener('error', () => reject(new Error('Ошибка сети')));
+    xhr.addEventListener('timeout', () => reject(new Error('Таймаут загрузки')));
+    
+    xhr.send(formData);
+  });
+};
 
 // CSS анимации
 if (!$('#slide-anim-style')) {
